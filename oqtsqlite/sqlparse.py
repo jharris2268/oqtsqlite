@@ -1,6 +1,6 @@
 #-----------------------------------------------------------------------
 #
-# This file is part of sqlselect
+# This file is part of oqtsqlite
 #
 # Copyright (C) 2018 James Harris
 #

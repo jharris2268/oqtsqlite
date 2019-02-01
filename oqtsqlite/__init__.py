@@ -1,6 +1,30 @@
+#-----------------------------------------------------------------------
+#
+# This file is part of oqtsqlite
+#
+# Copyright (C) 2018 James Harris
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public
+# License as published by the Free Software Foundation; either
+# version 3 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+#
+#-----------------------------------------------------------------------
+
+from __future__ import print_function
+
 import math, os, json, time
 import pymapnik11 as mk
-import utils as ut
+from .utils import time_op, print_sameline
 import oqt
 from . import sqlparse, _oqtsqlite
 #import sqlselect
@@ -120,7 +144,8 @@ class TilesCacheFile(TilesFilter):
         return TilesCacheFile.__call__(bx, zoom)
         
     def update_tiles(self, bx, zoom):
-        print 'update_tiles %.55s %2d' % (repr(bx),zoom),
+        sys.stdout.write("update_tiles %.55s %2d" % (repr(bx),zoom))
+        sys.stdout.flush()
         st=time.time()
         ts,locs=set([]),[]
         for a,b,c in self.header.Index:
@@ -129,7 +154,7 @@ class TilesCacheFile(TilesFilter):
                 if not a in self.tiles:
                     locs.append(b)
         
-        print '%d tiles required, %d already loaded' % (len(ts),len(self.tiles)),
+        sys.stdout.write("%d tiles required, %d already loaded" % (len(ts),len(self.tiles)))
         
         if len(locs)+len(self.tiles)>self.max_tiles:
             torm=len(locs)+len(self.tiles)-self.max_tiles
@@ -137,22 +162,21 @@ class TilesCacheFile(TilesFilter):
             rm.sort()
             
             rm=rm[:torm]
-            print 'remove  %d tiles' % (len(rm),),
+            sys.stdout.write('remove  %d tiles' % (len(rm),))
             
             for _,k in rm:
                 del self.tiles[k]
         
         if locs:
-            print 'load %d tiles' % (len(locs),),
+            sys.stdout.write('load %d tiles' % (len(locs),))
             
             nb=[]
             oqt._oqt.read_blocks_geometry(self.geomsfn, oqt.utils.addto(nb), locs)
             for t in nb:
                 self.tiles[t.Quadtree]=[[t],None]
-        print ': %0.1fs' % (time.time()-st)
+        sys.stdout.write(': %0.1fs\n' % (time.time()-st))
     
     
-
 class TilesSlim:
     def __init__(self, geomsfn):
         self.geomsfn = geomsfn
@@ -161,15 +185,15 @@ class TilesSlim:
         self.bounds=self.header.Box
             
     def __call__(self, bx, zoom):
-        print 'TilesSlim %.55s %2d' % (repr(bx),zoom),
+        print_sameline('TilesSlim %.55s %2d' % (repr(bx),zoom))
         st=time.time()
         locs=[b for a,b,c in self.header.Index if (a&31) <= zoom and bx.overlaps(oqt._oqt.quadtree_bbox(a,0))]
-        print 'load %d tiles,' % (len(locs),),
+        print_sameline('load %d tiles,' % (len(locs),))
         
         ans=[]
         oqt._oqt.read_blocks_geometry(self.geomsfn, oqt.utils.addto(ans), locs, numchan=4, bbox=bx, minzoom=zoom)
         nobjs = sum(len(bl) for bl in ans)
-        print ': %d objs, %0.1fs' % (nobjs, time.time()-st)
+        print(': %d objs, %0.1fs' % (nobjs, time.time()-st))
         return ans
     
 class SqliteTilesBase(object):
@@ -413,7 +437,7 @@ class SqliteTilesMvt(SqliteTilesBase):
         maxx, maxy = mk.coord_to_tile(bx.maxx, bx.miny, tz)
         
         st=time.time()
-        print '%-50.50s zoom %2d: tile range: %8.2f,%8.2f,%2d => %8.2f, %8.2f,%2d: ' % (bx,zoom,minx,miny,tz,maxx,maxy,tz),
+        print_sameline('%-50.50s zoom %2d: tile range: %8.2f,%8.2f,%2d => %8.2f, %8.2f,%2d: ' % (bx,zoom,minx,miny,tz,maxx,maxy,tz))
         data=SqliteStore(self.cols,zoom=zoom,views=self.views)
         cc,nt,tl=0,0,0
         for tx in xrange(int(minx),int(maxx)+1):
@@ -425,7 +449,7 @@ class SqliteTilesMvt(SqliteTilesBase):
                     tl+=len(dds)
                     cc+=data.add_mvt(tx,ty,tz,dds,zoom)
                     
-        print 'read %2d tiles [%6.1fkb], added %6d feats in %4.1fs' % (nt,tl/1024.0,cc,time.time()-st)
+        print('read %2d tiles [%6.1fkb], added %6d feats in %4.1fs' % (nt,tl/1024.0,cc,time.time()-st))
         return data, cc
         
         
@@ -486,9 +510,6 @@ def convert_postgis_to_altds(mp, tiles, tabpp=None):
             except Exception as ex:
                 print('layer %d failed: %s' % (i,ex))
     
-    for a,b in tm:
-        if b>1.0:
-            print "layer %d: %0.1fs" % (a,b)
     
     for k,v in dses.iteritems():
         v.set_to_layer(mp, k)

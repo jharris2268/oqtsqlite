@@ -1,3 +1,5 @@
 oqtsqlite.egg-info/
 build
 dist
+
+oqtsqlite/*.pyc

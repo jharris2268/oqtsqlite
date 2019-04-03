@@ -56,7 +56,7 @@ def prep_mbtiles_alt(conn, name, minzoom, maxzoom):
 
 
 class MBTiles(object):
-    def __init__(self, fn, gettile=None, minzoom=0,maxzoom=16,create=False,newconn=False, tiles_spec=None, alt_schema=False):
+    def __init__(self, fn, gettile=None, minzoom=0,maxzoom=16,create=False,newconn=False, tiles_spec=None, alt_schema=False, flipy=False):
         exists=os.path.exists(fn)
         if not exists and not create:
             raise IOError(2,'No such file: '+fn)
@@ -81,13 +81,18 @@ class MBTiles(object):
         self.flipy = False
         self.alt_schema=False
         self.curs.execute("select * from metadata")
+        self.metadata={}
         for a,b in self.curs:
             if a=='minzoom': self.minzoom=int(b)
-            if a=='maxzoom': self.maxzoom=int(b)
-            if a=='flipy': self.flipy = b=='true'
-            if a=='tiles_spec': self.tiles_spec=json.loads(b)
-            if a=='schema': self.alt_schema=b=='alt'
+            elif a=='maxzoom': self.maxzoom=int(b)
+            elif a=='flipy': self.flipy = b=='true'
+            elif a=='tiles_spec': self.tiles_spec=json.loads(b)
+            elif a=='schema': self.alt_schema=b=='alt'
+            else:
+                self.metadata[a]=b
         
+        if flipy is not None:
+            self.flipy=flipy
         
         self.ii = 0
         

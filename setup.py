@@ -12,7 +12,8 @@ def call_pkgconfig(args):
 
     
 cflags = ['-std=c++14',]
-cflags.append('-I/home/james/work/oqtcpp/include')
+#cflags.append('-I/home/james/work/oqtcpp/include')
+cflags.append('-I/usr/local/include')
 cflags.append('-fvisibility=hidden')
 cflags.append('-Wshadow')
 libs =['-L/usr/local/lib', '-loqt', '-lsqlite3']

@@ -131,7 +131,7 @@ class TilesCacheFile(TilesFilter):
         super(TilesCacheFile).__init__(self, [], None)
         
         self.geomsfn = geomsfn
-        self.header = oqt._oqt.get_header_block(geomsfn)
+        self.header = oqt.pbfformat.get_header_block(geomsfn)
         
         self.max_tiles=max_tiles
         self.tiles={}
@@ -171,7 +171,7 @@ class TilesCacheFile(TilesFilter):
             sys.stdout.write('load %d tiles' % (len(locs),))
             
             nb=[]
-            oqt._oqt.read_blocks_geometry(self.geomsfn, oqt.utils.addto(nb), locs)
+            oqt.geometry.read_blocks_geometry(self.geomsfn, oqt.utils.addto(nb), locs)
             for t in nb:
                 self.tiles[t.Quadtree]=[[t],None]
         sys.stdout.write(': %0.1fs\n' % (time.time()-st))
@@ -180,41 +180,49 @@ class TilesCacheFile(TilesFilter):
 class TilesSlim:
     def __init__(self, geomsfn):
         self.geomsfn = geomsfn
-        self.header = oqt._oqt.get_header_block(geomsfn)
+        self.header = oqt.pbfformat.get_header_block(geomsfn)
         
         self.bounds=self.header.Box
             
     def __call__(self, bx, zoom):
         print_sameline('TilesSlim %.55s %2d' % (repr(bx),zoom))
         st=time.time()
-        locs=[b for a,b,c in self.header.Index if (a&31) <= zoom and bx.overlaps(oqt._oqt.quadtree_bbox(a,0))]
+        locs=[b for a,b,c in self.header.Index if (a&31) <= zoom and bx.overlaps(oqt.utils.quadtree_bbox(a,0))]
         print_sameline('load %d tiles,' % (len(locs),))
         
         ans=[]
-        oqt._oqt.read_blocks_geometry(self.geomsfn, oqt.utils.addto(ans), locs, numchan=4, bbox=bx, minzoom=zoom)
+        oqt.geometry.read_blocks_geometry(self.geomsfn, oqt.utils.addto(ans), locs, numchan=4, bbox=bx, minzoom=zoom)
         nobjs = sum(len(bl) for bl in ans)
         print(': %d objs, %0.1fs' % (nobjs, time.time()-st))
         return ans
     
 class SqliteTilesBase(object):
-    def __init__(self, bounds, style=None, extended=False):
+    def __init__(self, bounds, style=None, extended=False, cols=None, views=None):
         
-        if style is None:
-            style=oqt.geometrystyle.GeometryStyle()
-            
-        self.cols = [
-            prep_table_point(style),
-            prep_table_line(style),
-            prep_table_polygon(style)]
-        self.views=default_views
-        if extended:
-            self.cols += [
-                prep_table_line(style, 'planet_osm_highway'),
-                prep_table_line(style, 'planet_osm_polygon_exterior'),
-                prep_table_polygon(style, 'planet_osm_building'),
-                prep_table_polygon(style, 'planet_osm_boundary',set(['name','admin_level','boundary'])),
-                prep_table_polygon(style, 'planet_osm_polypoint')]
+        if not cols is None:
+            self.cols=cols
             self.views=[]
+            if not views is None:
+                self.views=views
+        else:
+        
+            if style is None:
+                style=oqt.geometry.style.GeometryStyle()
+                
+            self.cols = [
+                prep_table_point(style),
+                prep_table_line(style),
+                prep_table_polygon(style)]
+                
+            self.views=default_views
+            if extended:
+                self.cols += [
+                    prep_table_line(style, 'planet_osm_highway'),
+                    prep_table_line(style, 'planet_osm_polygon_exterior'),
+                    prep_table_polygon(style, 'planet_osm_building'),
+                    prep_table_polygon(style, 'planet_osm_boundary',set(['name','admin_level','boundary'])),
+                    prep_table_polygon(style, 'planet_osm_polypoint')]
+                self.views=[]
         
         self.bounds=bounds
         self.prev=None
@@ -236,8 +244,8 @@ class SqliteTilesBase(object):
         
     
 class SqliteTiles(SqliteTilesBase):
-    def __init__(self, tiles, bounds=None,style=None, extended=False):
-        super(SqliteTiles,self).__init__(bounds,style,extended)
+    def __init__(self, tiles, bounds=None,style=None, extended=False,cols=None, views=None):
+        super(SqliteTiles,self).__init__(bounds,style,extended,cols, views)
         self.tiles=tiles
         self.prev=None
         if bounds is None:
@@ -247,11 +255,11 @@ class SqliteTiles(SqliteTilesBase):
                 self.bounds=mk.forward(mk.box2d(*[b*0.0000001 for b in self.tiles.bounds]))
         else:
             self.bounds=bounds
-    
+        
     def prep_sqlitestore(self, bx, zoom):
         data=SqliteStore(self.cols,zoom, views=self.views)
         
-        fb=oqt._oqt.bbox(*map(oqt.intm, mk.backward(bx)))
+        fb=oqt.utils.bbox(*map(oqt.intm, mk.backward(bx)))
         
         cc=data.add_all(self.tiles(fb,zoom), fb, zoom)
         
@@ -260,11 +268,11 @@ class SqliteTiles(SqliteTilesBase):
             
     
 class SqliteStore:
-    def __init__(self, cols=None, zoom=None,fn=None,views=None):
+    def __init__(self, cols=None, zoom=None,fn=None,views=None,table_prfx=None):
         
         
         if cols is None:
-            style=oqt.geometrystyle.GeometryStyle()
+            style=oqt.geometry.style.GeometryStyle()
             self.cols = [
                 prep_table_point(style),
                 prep_table_line(style),
@@ -273,6 +281,11 @@ class SqliteStore:
             
         else:
             self.cols=cols
+        
+        if table_prfx is None:
+            self.table_prfx='planet_osm_'
+        else:
+            self.table_prfx=table_prfx
         
         self.views = default_views if views is None else views
         
@@ -332,7 +345,7 @@ class SqliteStore:
             self.conn,
             self.cols,
             tile,
-            oqt._oqt.bbox(18000000000,900000000,-1800000000,-900000000) if filter_box is None else filter_box,
+            oqt.utils.bbox(18000000000,900000000,-1800000000,-900000000) if filter_box is None else filter_box,
             -1 if minzoom is None else minzoom,
             self.get_tables
             )
@@ -340,7 +353,7 @@ class SqliteStore:
     
     def get_col(self, tab):
         for c in self.cols:
-            if c.table_name=='planet_osm_'+tab:
+            if c.table_name==self.table_prfx+tab:
                 return c
         
         if tab in ('building','boundary'):
@@ -375,7 +388,7 @@ class SqliteStore:
                 continue
             
             
-            tile_qt=oqt._oqt.quadtree_from_tuple(tx,ty,tz)
+            tile_qt=oqt.elements.quadtree_from_tuple(tx,ty,tz)
             
                      
             for feat in v:
@@ -417,11 +430,11 @@ class SqliteStore:
 
 
 class SqliteTilesMvt(SqliteTilesBase):
-    def __init__(self, tiles, bounds, style=None, extended=False):
-        super(SqliteTilesMvt,self).__init__(bounds)
+    def __init__(self, tiles, bounds, style=None, extended=False, cols=None,views=None,table_prfx=None):
+        super(SqliteTilesMvt,self).__init__(bounds,style,extended,cols,views)
         
+        self.table_prfx=table_prfx
         
-            
         self.tiles=tiles
         
         self.minzoom=int(self.tiles.minzoom or 0)
@@ -438,7 +451,7 @@ class SqliteTilesMvt(SqliteTilesBase):
         
         st=time.time()
         print_sameline('%-50.50s zoom %2d: tile range: %8.2f,%8.2f,%2d => %8.2f, %8.2f,%2d: ' % (bx,zoom,minx,miny,tz,maxx,maxy,tz))
-        data=SqliteStore(self.cols,zoom=zoom,views=self.views)
+        data=SqliteStore(self.cols,zoom=zoom,views=self.views, table_prfx=self.table_prfx)
         cc,nt,tl=0,0,0
         for tx in xrange(int(minx),int(maxx)+1):
             for ty in xrange(int(miny),int(maxy)+1):
@@ -504,7 +517,7 @@ def convert_postgis_to_altds(mp, tiles, tabpp=None):
                 if tabpp is not None:
                     tt=tt.replace(tabpp,'planet_osm')
                 
-                t,mm = ut.timeop(query_to_sqlite,tt)
+                t,mm = time_op(query_to_sqlite,tt)
                 tm.append((i,t))
                 dses[i] = AltDs(tiles, mm, idx=i)
             except Exception as ex:

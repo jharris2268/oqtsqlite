@@ -6,7 +6,7 @@
 
 #include "oqt/common.hpp"
 #include "oqt/elements/block.hpp"
-#include "oqt/geometry/postgiswriter.hpp"
+#include "oqt/geometry/utils.hpp"
 #include "oqt/geometry/elements/point.hpp"
 #include "oqt/geometry/elements/linestring.hpp"
 #include "oqt/geometry/elements/simplepolygon.hpp"
@@ -14,35 +14,6 @@
 
 
 namespace py=pybind11;
-/*
-class BindElement {
-    
-    public:
-        BindElement(std::vector<std::string> keys, const std::string& _table_name);
-        virtual ~BindElement() {}
-        
-        const std::string& table_name() { return table_name_; }
-        const std::string& table_create() { return table_create_; }
-        const std::string& table_insert() { return table_insert_; }
-        
-        size_t insert_element(std::shared_ptr<SqliteDb> conn, oqt::ElementPtr ele, int64_t tile_qt);
-        size_t insert_python(std::shared_ptr<SqliteDb> conn, const std::map<std::string,py::object>& props);
-        
-        bool call_point(std::shared_ptr<oqt::geometry::Point> pt, int64_t tile_qt, sqlite3_stmt* curs);
-        bool call_line(std::shared_ptr<oqt::geometry::Linestring> ln, int64_t tile_qt, sqlite3_stmt* curs);
-        bool call_simplepolygon(std::shared_ptr<oqt::geometry::SimplePolygon> py, int64_t tile_qt, sqlite3_stmt* curs);
-        bool call_complicatedpolygon(std::shared_ptr<oqt::geometry::ComplicatedPolygon> py, int64_t tile_qt, sqlite3_stmt* curs);
-        bool call_common(std::shared_ptr<oqt::BaseGeometry> geom, int64_t tile_qt, sqlite3_stmt* curs);
-        bool call_python(const std::map<std::string,py::object>& props, sqlite3_stmt* curs);
-        
-    private:
-        std::string table_name_;
-        int osm_id, tile, quadtree, part, tags, minzoom, layer, z_order, length, way_area, way;
-        std::map<std::string,int> tag_keys;
-        std::string table_create_, table_insert_;
-        
-        
-};*/
 
 class BindElement2 {
     

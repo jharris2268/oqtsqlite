@@ -103,6 +103,8 @@ PYBIND11_PLUGIN(_oqtsqlite) {
     
     m.def("read_mvt_tile", &read_mvt_tile);
     
+    m.def("read_value", mvt_value_py);
+    
     
     return m.ptr();
 }

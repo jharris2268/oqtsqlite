@@ -52,6 +52,9 @@ def prep_mbtiles_alt(conn, name, minzoom, maxzoom):
     curs.execute("create index tiles_basetile on tile_data (basetile)")
     
     curs.execute("create view tiles as select z as zoom_level, x as tile_column, y as tile_row, data as tile_data from tile_data")
+    
+    curs.execute("create table summary (basetile text, timestamp text, minzoom, maxzoom, count int)");
+    
     conn.commit()
 
 
@@ -134,19 +137,35 @@ class MBTiles(object):
         return ans
     
     
-    def start(self):
+    def start(self, basetile=None, timestamp=None):
+        
         if self.trans:
+                           
             self.conn.commit()
         if self.newconn:
             self.conn=sqlite3.connect(self.fn,check_same_thread=False)
             self.curs=self.conn.cursor()
+        
+        
         self.curs.execute("begin")
         self.trans=True
     def finish(self):
+        
         self.conn.commit()
         self.trans=False
+    
+    def write_summary(self, basetile, timestamp, minzoom, maxzoom, count):
+        self.curs.execute("insert into summary values (?, ?, ?, ?, ?)", (basetile,timestamp,minzoom, maxzoom, count))
+    
+    def remove_basetile(self, basetile):
         
-        
+        self.start()
+        self.curs.execute("delete from summary where basetile=?", (basetile,))
+        print("delete from summary where basetile = %s: %s" % (repr(basetile),list(self.curs)))
+        self.curs.execute("delete from tile_data where basetile=?", (basetile,))
+        print("delete from tile_data where basetile = %s: %s" % (repr(basetile),list(self.curs)))
+        self.finish()
+    
     def add_tile(self, x, y, z, data=None,basetile=None, tile=None, replace=False):
         if data is None:
             if self.gettile is None:
@@ -159,6 +178,8 @@ class MBTiles(object):
             if replace:
                 self.curs.execute("delete from tile_data where x=? and y=? and z=?", (x,y,z))
             self.curs.execute("insert into tile_data values (?,?,?,?,?,?)", (basetile,tile,x,y,z,None if data is None else buffer(data)))
+            
+            
         else:
             if replace:
                 self.curs.execute("delete from tile_data where tile_column=? and tile_row=? and zoom_level=?", (x,y,z))

@@ -4,6 +4,7 @@
 #include "oqt/elements/geometry.hpp"
 #include <sstream>
 #include <iomanip>
+#include <oqt/utils/pbf/fixedint.hpp>
 
 std::string as_hex(const std::string& str) {
     std::stringstream ss;
@@ -830,7 +831,83 @@ size_t insert_mvt_feature(
     conn->prepare_step_finalize(be->table_insert(), cb,nullptr);
     return 1;
 }
+
+std::string make_multigeom(const std::vector<blob>& geoms) {
     
+    if (geoms.size()==0) {
+        return "\1\7\0\0\0\0\0\0\0";
+    }
+    if (geoms.size()==1) {
+        return geoms[0].s;
+    }
+    
+    size_t ln=9;
+    char ty=0;
+    for (const auto& g: geoms) {
+        ln += g.s.size();
+        if (ty==0) {
+            ty = g.s[1];
+        } else if (ty==4) {
+            //pass
+        } else {
+            if (ty!=(g.s[1])) {
+                ty=4;
+            }
+        }
+    }
+    
+    std::string out(ln,'\0');
+    out[0] = '\1';
+    oqt::write_uint32_le(out, 1, ty+3);
+    oqt::write_uint32_le(out, 5, geoms.size());
+    size_t p=9;
+    for (const auto& g: geoms) {
+        std::copy(g.s.begin(),g.s.end(), out.begin()+p);
+        p += g.s.size();
+    }
+    
+    return out;
+}
+    
+    
+
+size_t insert_mvt_feature_allgeoms(
+    std::shared_ptr<BindElement2>& be, 
+    std::shared_ptr<SqliteDb> conn,
+    const mvt_feature& feat) {
+    
+    auto cb = [&be,&feat](sqlite3_stmt* curs) {
+    
+        be->bind_id(curs, feat.id);
+        be->bind_minzoom(curs, feat.minzoom);
+        
+        oqt::tagvector others;
+        for (const auto& kv: feat.properties) {
+            if (kv.first == "part") { be->bind_part(curs, read_value_integer(kv.second.s)); }
+            else if (kv.first == "quadtree") { be->bind_quadtree(curs, read_value_integer(kv.second.s)); }
+            else if (kv.first == "tile") { be->bind_tile(curs, read_value_integer(kv.second.s)); }
+            else if (kv.first == "layer") { be->bind_layer(curs, read_value_integer(kv.second.s)); }
+            else if (kv.first == "z_order") { be->bind_z_order(curs, read_value_integer(kv.second.s)); }
+            else if (kv.first == "length") { be->bind_length(curs, read_value_double(kv.second.s)); }
+            else if (kv.first == "way_area") { be->bind_way_area(curs, read_value_double(kv.second.s)); }
+            else {
+                oqt::Tag tg(kv.first, read_value_string(kv.second.s));
+                if (!be->bind_key_val(curs, tg)) {
+                    others.push_back(tg);
+                }
+            }
+        }
+        if (!others.empty()) {
+            be->bind_tags(curs, others);
+        }
+        
+        be->bind_way(curs, make_multigeom(feat.geometries));
+        return true;
+    };
+    
+    conn->prepare_step_finalize(be->table_insert(), cb,nullptr);
+    return 1;
+}
 
 
 size_t insert_mvt_tile(
@@ -838,7 +915,7 @@ size_t insert_mvt_tile(
     
     std::function<std::shared_ptr<BindElement2>(std::string)> get_bind,
     const std::string& data, int64_t tx, int64_t ty, int64_t tz, bool gzipped,
-    oqt::int64 minzoom) {
+    oqt::int64 minzoom, bool merge_geoms, bool mvt_geoms) {
         
         
     if (!conn) { throw std::domain_error("no connection"); }
@@ -846,15 +923,19 @@ size_t insert_mvt_tile(
        
     
     size_t cnt=0;
-    auto tables=read_mvt_tile(data,tx,ty,tz,gzipped);
+    auto tables=read_mvt_tile(data,tx,ty,tz,gzipped, mvt_geoms);
     
     for (const auto& pp: tables) {
         std::shared_ptr<BindElement2> be = get_bind(pp.first);
         if (!be) { continue; }
         
         for (const auto& feat: pp.second) {
-            for (size_t i=0; i < feat.geometries.size(); i++) {
-                cnt+=insert_mvt_feature(be,conn,feat,i);
+            if (merge_geoms || mvt_geoms) {
+                cnt += insert_mvt_feature_allgeoms(be, conn, feat);
+            } else {
+                for (size_t i=0; i < feat.geometries.size(); i++) {
+                    cnt+=insert_mvt_feature(be,conn,feat,i);
+                }
             }
         }
     }

@@ -9,7 +9,6 @@
 #include "mvt.hpp"
 using namespace std::string_literals;
 
-typedef std::function<std::pair<double,double>(double,double,double)> transform_func;
 
 
 double read_float(const std::string& data, size_t pos) {
@@ -202,7 +201,7 @@ double ring_area(const std::vector<std::pair<double,double>>& r) {
 
 
 
-size_t read_ring(std::vector<std::vector<std::pair<double,double>>>& rings, const transform_func& forward, int64_t np, dedelta& x, dedelta& y,const std::vector<oqt::uint64>& cmds, size_t pos, bool ispoly) {
+size_t read_ring_old(std::vector<std::vector<std::pair<double,double>>>& rings, const transform_func& forward, int64_t np, dedelta& x, dedelta& y,const std::vector<oqt::uint64>& cmds, size_t pos, bool ispoly) {
     
     if ((cmds[pos])!=9) { throw std::domain_error("failed: ring doesn't start with a single moveto"); }
     
@@ -237,16 +236,77 @@ size_t read_ring(std::vector<std::vector<std::pair<double,double>>>& rings, cons
     return endpos;
 }
 
-std::vector<std::vector<std::pair<double,double>>> read_rings(const transform_func& forward, int64_t np, const std::vector<oqt::uint64>& cmds, bool is_poly) {
+
+
+std::vector<std::vector<std::pair<double,double>>> read_rings_old(const transform_func& forward, int64_t np, const std::vector<oqt::uint64>& cmds, bool is_poly) {
     size_t pos=0;
     
     std::vector<std::vector<std::pair<double,double>>> result;
     dedelta x, y;
     while (pos < cmds.size()) {
-        pos = read_ring(result, forward, np, x, y, cmds, pos,is_poly);
+        pos = read_ring_old(result, forward, np, x, y, cmds, pos,is_poly);
     }
     return result;
 }
+
+
+size_t read_next_cmd(std::vector<std::vector<std::pair<double,double>>>& result, const transform_func& forward, dedelta& x, dedelta& y, int64_t np, const std::vector<oqt::uint64>& cmds, size_t pos) {
+    
+    size_t c = cmds[pos] & 7;
+    size_t l = cmds[pos] >> 3;
+    
+    pos++;
+    if (c==1) {
+        for (size_t i=0; i < l; i++) {
+            double xx = x(cmds[pos]);
+            double yy = y(cmds[pos+1]);
+            result.push_back({forward(xx,yy,np)});            
+            pos+=2;
+        }
+    } else if (c==2) {
+        if (result.empty()) { throw std::domain_error("lineto without moveto?"); }
+        result.back().reserve(1+l);
+        for (size_t i=0; i < l; i++) {
+            double xx = x(cmds[pos]);
+            double yy = y(cmds[pos+1]);
+            result.back().push_back(forward(xx,yy,np));            
+            pos+=2;
+        }
+    } else if (c==7) {
+        if (l!=1) { throw std::domain_error("close with len="+std::to_string(l)); }
+        if (result.empty()) { throw std::domain_error("close without moveto?"); }
+        result.back().push_back(result.back().front());
+    }
+    return pos;
+}
+    
+
+std::vector<std::vector<std::pair<double,double>>> read_rings(const transform_func& forward, int64_t np, const std::vector<oqt::uint64>& cmds, size_t gt) {
+    size_t pos=0;
+    
+    std::vector<std::vector<std::pair<double,double>>> result;
+    dedelta x, y;
+    while (pos < cmds.size()) {
+        pos = read_next_cmd(result, forward, x, y, np, cmds, pos);
+    }
+    
+    for (const auto& r: result) {
+        if (gt==1) {
+            if (r.size()!=1) { throw std::domain_error("point with "+std::to_string(r.size())+" points?"); }
+        } else if (gt==2) {
+            if (r.size()<2) { throw std::domain_error("line with "+std::to_string(r.size())+" points?"); }
+        }  else if (gt==3) {
+            if (r.size()<3) {
+                throw std::domain_error("ring with "+std::to_string(r.size())+" points?");
+            } else if (r.front()!=r.back()) {
+                throw std::domain_error("ring with not a ring?");
+            }
+        }
+    }
+    return result;
+}
+        
+
 
 
 std::string pack_linestring(const std::vector<std::pair<double,double>>& line) {
@@ -267,7 +327,7 @@ std::string pack_linestring(const std::vector<std::pair<double,double>>& line) {
 
 std::vector<blob> read_linestring(const transform_func& forward, int64_t np, const std::vector<oqt::uint64>& cmds) {
         
-    auto rings = read_rings(forward, np, cmds, false);
+    auto rings = read_rings(forward, np, cmds, 2);
     
     std::vector<blob> result;
     result.reserve(rings.size());
@@ -305,7 +365,7 @@ std::string pack_polygon(const std::vector<std::vector<std::pair<double,double>>
 }
    
 std::vector<blob> read_polygon(const transform_func& forward, int64_t np, const std::vector<oqt::uint64>& cmds) {
-    auto rings = read_rings(forward,np,cmds,true);
+    auto rings = read_rings(forward,np,cmds,3);
     
     if (rings.empty()) { return {}; }
     std::vector<blob> out;
@@ -526,7 +586,7 @@ std::vector<blob> read_mvt_geometry(const transform_func& forward, int64_t np, o
 mvt_feature read_mvt_feature(
     const transform_func& forward, int64_t np,
     const std::vector<std::string>& keys, const std::vector<std::string>& vals, 
-    const std::string& data, bool pass_geoms) {
+    const std::string& data, bool pass_geoms, std::string tile_key) {
     
     
     mvt_feature feat;
@@ -566,9 +626,12 @@ mvt_feature read_mvt_feature(
         }
     }
     if (pass_geoms) {
-        feat.geometries.push_back(oqt::pack_pbf_tags({oqt::PbfTag{1,(uint64_t) np,""}}));
-        feat.geometries.push_back(oqt::pack_pbf_tags({oqt::PbfTag{2,gt,""}}));
-        feat.geometries.push_back(cmds);
+        feat.geometries.push_back(oqt::pack_pbf_tags({
+                oqt::PbfTag{3,gt,""},
+                oqt::PbfTag{4,0,cmds},
+                oqt::PbfTag{5,(oqt::uint64) np,""},
+                oqt::PbfTag{6,0,tile_key}
+            }));
     } else {
         feat.geometries=read_mvt_geometry(forward, np, gt, oqt::read_packed_int(cmds));
     }
@@ -578,7 +641,7 @@ mvt_feature read_mvt_feature(
 
 
 
-void read_mvt_layer(data_map& result, const transform_func& forward, const std::string& data, bool pass_geoms) {
+void read_mvt_layer(data_map& result, const transform_func& forward, const std::string& data, bool pass_geoms, std::string tile_key) {
     
     
     std::vector<std::string> feature_blobs;
@@ -611,42 +674,69 @@ void read_mvt_layer(data_map& result, const transform_func& forward, const std::
     auto& features = result[table];
     features.reserve(features.size()+feature_blobs.size());
     for (const auto& f: feature_blobs) {
-        features.push_back(read_mvt_feature(forward, np, keys, vals, f, pass_geoms));
+        features.push_back(read_mvt_feature(forward, np, keys, vals, f, pass_geoms, tile_key));
     }
     
     
 }
+
+  
+transform_func make_transform(int64_t tx, int64_t ty, int64_t tz) {
+    const double earth_width = 40075016.68557849;
+
+    double ts = earth_width / (1ll<<tz);
+    double x0 = tx*ts - earth_width/2;
+    double y0 = earth_width/2 - (ty)*ts;
+    
+    return [ts,x0,y0](double x, double y, double np) { return std::make_pair(x0 + (ts*x)/np, y0 - (ts*y)/np); };
+}
+
+
+
 
 std::vector<blob> read_mvt_geometry_call(int64_t tx, int64_t ty, int64_t tz, int64_t np, int64_t gt, std::string cmds_in) {
     auto cmds = oqt::read_packed_int(cmds_in);
-    const double earth_width = 40075016.68557849;
-
-    double ts = earth_width / (1ll<<tz);
-    double x0 = tx*ts - earth_width/2;
-    double y0 = earth_width/2 - (ty)*ts;
-    transform_func forward = [ts,x0,y0](double x, double y, double npi) { return std::make_pair(x0 + (ts*x)/npi, y0 - (ts*y)/npi); };
+    
+    transform_func forward = make_transform(tx,ty,tz);
     
     return read_mvt_geometry(forward, np, gt, cmds);
 }
-    
-    
 
-data_map read_mvt_tile(const std::string& data_in, int64_t tx, int64_t ty, int64_t tz, bool gzipped/*, bool pass_geoms*/) {
+std::vector<blob> read_mvt_geometry_packed(std::string data) {
+    int64_t np=0;
+    int64_t gt=0;
+    std::vector<oqt::uint64> cmds;
+    std::vector<oqt::uint64> tile_key;
     
-    if (gzipped) {
-        return read_mvt_tile(oqt::decompress_gzip(data_in), tx, ty, tz, false);
+    size_t pos=0;
+    auto tg = oqt::read_pbf_tag(data,pos);
+    for ( ; tg.tag>0; tg=oqt::read_pbf_tag(data,pos)) {
+        if (tg.tag==3) { gt = tg.value; }
+        if (tg.tag==4) { cmds=oqt::read_packed_int(tg.data); }
+        if (tg.tag==5) { np = tg.value; }
+        if (tg.tag==6) { tile_key=oqt::read_packed_int(tg.data); }
     }
     
-    const double earth_width = 40075016.68557849;
+    if (tile_key.size()==3) {
+        transform_func forward = make_transform(tile_key[0],tile_key[1],tile_key[2]);
+        return read_mvt_geometry(forward, np, gt, cmds);
+    } else {
+        transform_func forward = [](double x, double y, double npi) { return std::make_pair(x*256./npi, y*256./npi); }; 
+        return read_mvt_geometry(forward, np, gt, cmds);
+    }
 
-    double ts = earth_width / (1ll<<tz);
-    double x0 = tx*ts - earth_width/2;
-    double y0 = earth_width/2 - (ty)*ts;
-    transform_func forward = [ts,x0,y0](double x, double y, double np) { return std::make_pair(x0 + (ts*x)/np, y0 - (ts*y)/np); };
+}
+
+  
+
+data_map read_mvt_tile(const std::string& data_in, int64_t tx, int64_t ty, int64_t tz, bool gzipped, bool pass_geoms) {
     
-    //auto p = forward(0,4096,4096);
-    //auto q = forward(4096,0,4096);
-    //std::cout << tx << ", " << ty << ", " << tz << "=> " << p.first << ", " << p.second << ", " << q.first << ", " << q.second << std::endl;
+    if (gzipped) {
+        return read_mvt_tile(oqt::decompress_gzip(data_in), tx, ty, tz, false, pass_geoms);
+    }
+    
+    transform_func forward = make_transform(tx,ty,tz);
+    std::string tile_key = oqt::write_packed_int({(oqt::uint64) tx, (oqt::uint64) ty, (oqt::uint64) tz});
     
     data_map result;
     
@@ -655,7 +745,7 @@ data_map read_mvt_tile(const std::string& data_in, int64_t tx, int64_t ty, int64
     
     for ( ; tg.tag>0; tg=oqt::read_pbf_tag(data_in, pos)) {
         if (tg.tag==3) {
-            read_mvt_layer(result, forward, tg.data, false);
+            read_mvt_layer(result, forward, tg.data, pass_geoms, tile_key);
         } else {
             std::cout << "?? " << tg.tag << " " << tg.value << " " << tg.data << std::endl;
         }

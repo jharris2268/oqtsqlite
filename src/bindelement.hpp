@@ -58,6 +58,7 @@ size_t default_get_tables(oqt::ElementPtr ele);
 size_t extended_get_tables(oqt::ElementPtr ele);
 std::vector<std::string> extended_table_names();
 
+
 std::vector<size_t> insert_block(
     std::shared_ptr<SqliteDb> conn,
     std::vector<std::shared_ptr<BindElement2>> binds,
@@ -65,11 +66,25 @@ std::vector<size_t> insert_block(
     std::function<size_t(oqt::ElementPtr)> get_tables);
 
 
+class mvt_feature;
+
+size_t insert_mvt_feature(
+    std::shared_ptr<BindElement2>& be, 
+    std::shared_ptr<SqliteDb> conn,
+    const mvt_feature& feat, size_t geom_idx);
+    
+std::string make_multigeom(const std::vector<blob>& geoms);
+
+size_t insert_mvt_feature_allgeoms(
+    std::shared_ptr<BindElement2>& be, 
+    std::shared_ptr<SqliteDb> conn,
+    const mvt_feature& feat);
+
 size_t insert_mvt_tile(
     std::shared_ptr<SqliteDb> conn,
     
     std::function<std::shared_ptr<BindElement2>(std::string)> get_bind,
     const std::string& data, int64_t tx, int64_t ty, int64_t tz, bool gzipped,
-    oqt::int64 minzoom);
+    oqt::int64 minzoom, bool merge_geoms, bool mvt_geoms);
     
 #endif

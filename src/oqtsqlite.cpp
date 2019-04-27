@@ -86,6 +86,8 @@ PYBIND11_PLUGIN(_oqtsqlite) {
     m.def("extended_table_names", &extended_table_names);
     
     
+    m.def("insert_mvt_feature", &insert_mvt_feature);
+    m.def("insert_mvt_feature_allgeoms", &insert_mvt_feature_allgeoms);
     m.def("insert_mvt_tile", &insert_mvt_tile);
     
     py::class_<mvt_feature>(m, "mvt_feature")
@@ -96,6 +98,7 @@ PYBIND11_PLUGIN(_oqtsqlite) {
         .def_readonly("minzoom", &mvt_feature::minzoom)
         .def_readonly("geometries", &mvt_feature::geometries)
     ;
+    m.def("make_multigeom", [](const mvt_feature& f) { return blob(make_multigeom(f.geometries)); });
     
     m.def("read_value_integer",[](const blob& b) { return read_value_integer(b.s); });
     m.def("read_value_double",[](const blob& b) { return read_value_double(b.s); });
@@ -104,7 +107,7 @@ PYBIND11_PLUGIN(_oqtsqlite) {
     m.def("read_mvt_tile", &read_mvt_tile);
     
     m.def("read_value", mvt_value_py);
-    
+    m.def("read_mvt_geometry_packed", &read_mvt_geometry_packed);
     
     return m.ptr();
 }

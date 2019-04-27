@@ -476,3 +476,21 @@ def proc(qu, drop_wrapper=True):
                 return res.Table
 
     return res
+
+
+def as_json(query):
+    if isinstance(query, list):
+        return [as_json(q) for q in query]
+        
+    if not isinstance(query, sq.Base):
+        return query
+    
+        
+    result = {}
+    result['name'] = query.name
+    if hasattr(query, 'type'):
+        result['type'] = query.type
+    for p in query.params:
+        result[p] = as_json(getattr(query, p))
+        
+    return result

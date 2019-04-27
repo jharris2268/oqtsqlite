@@ -37,54 +37,37 @@ def query_to_sqlite(qu):
 
 #_oqtsqlite.BindElement2.insert_element = _oqtsqlite.insert_element
 #_oqtsqlite.BindElement2.insert_python = _oqtsqlite.insert_python
+default_node_cols = ['access', 'addr:housename', 'addr:housenumber', 'addr:interpolation', 'admin_level', 'aerialway', 'aeroway', 'amenity', 'barrier', 'bicycle', 'boundary', 'bridge', 'building', 'construction', 'covered', 'embankment', 'foot', 'highway', 'historic', 'horse', 'junction', 'landuse', 'leisure', 'lock', 'man_made', 'military', 'name', 'natural', 'oneway', 'place', 'power', 'railway', 'ref', 'religion', 'route', 'service', 'shop', 'surface', 'tourism', 'tunnel', 'water', 'waterway']
+default_way_cols = ['access', 'addr:housename', 'addr:housenumber', 'addr:interpolation', 'admin_level', 'aerialway', 'aeroway', 'amenity', 'barrier', 'bicycle', 'boundary', 'bridge', 'building', 'construction', 'covered', 'embankment', 'foot', 'highway', 'historic', 'horse', 'junction', 'landuse', 'leisure', 'lock', 'man_made', 'military', 'name', 'natural', 'oneway', 'place', 'power', 'railway', 'ref', 'religion', 'route', 'service', 'shop', 'surface', 'tourism', 'tracktype', 'tunnel', 'water', 'waterway']
 
-def prep_table_point(style, tabname='planet_osm_point',filtercols=None):
+
+def prep_table_point(node_cols=default_node_cols, all_other_tags=True, tabname='planet_osm_point',filtercols=None):
     
     cols = [('osm_id','integer'), ('tile','integer'), ('quadtree','integer')]
-    for k,v in sorted(style.keys.iteritems()):
-        if filtercols is not None:
-            if not k in filtercols:
-                continue
-        if k in ('XXX','layer'): continue
-
-        if v.IsNode:
-            cols.append((k,'text'))
+    cols += [(n,'text') for n in node_cols if (filtercols is None or n in filtercols)]
     
-    if style.other_tags:
+    if all_other_tags:
         cols += [('tags','blob'),]
     
     cols+=[('minzoom','integer')]
     cols += [('layer', 'integer'), ('way','blob')]
     return _oqtsqlite.BindElement2([a for a,b in cols], tabname)
 
-def prep_table_line(style, tabname='planet_osm_line',filtercols=None):
+def prep_table_line(way_cols=default_node_cols, all_other_tags=True, tabname='planet_osm_line',filtercols=None):
     cols = [('osm_id','integer'), ('tile','integer'), ('quadtree','integer')]
-    for k,v in sorted(style.keys.iteritems()):
-        if filtercols is not None:
-            if not k in filtercols:
-                continue
-        if k in ('XXX','layer'): continue
-        if v.IsWay:
-            cols.append((k,'text'))
-    
-    if style.other_tags:
+    cols += [(n,'text') for n in default_way_cols if (filtercols is None or n in filtercols)]
+    if all_other_tags:
         cols += [('tags','blob'),]
     
     cols+=[('minzoom','integer')]
     cols += [('layer', 'integer'), ('z_order','integer'),('length','float'),('way','blob')]
     return _oqtsqlite.BindElement2([a for a,b in cols], tabname)
 
-def prep_table_polygon(style,tabname='planet_osm_polygon', filtercols=None):
+def prep_table_polygon(way_cols=default_node_cols, all_other_tags=True,tabname='planet_osm_polygon', filtercols=None):
     cols = [('osm_id','integer'), ('part','integer'),('tile','integer'), ('quadtree','integer')]
-    for k,v in sorted(style.keys.iteritems()):
-        if filtercols is not None:
-            if not k in filtercols:
-                continue
-        if k in ('XXX','layer'): continue
-        if v.IsWay:
-            cols.append((k,'text'))
+    cols += [(n,'text') for n in default_way_cols if (filtercols is None or n in filtercols)]
     
-    if style.other_tags:
+    if all_other_tags:
         cols += [('tags','blob'),]
     
     cols+=[('minzoom','integer')]
@@ -187,7 +170,7 @@ class TilesSlim:
     def __call__(self, bx, zoom):
         print_sameline('TilesSlim %.55s %2d' % (repr(bx),zoom))
         st=time.time()
-        locs=[b for a,b,c in self.header.Index if (a&31) <= zoom and bx.overlaps(oqt.utils.quadtree_bbox(a,0))]
+        locs=[b for a,b,c in self.header.Index if (a&31) <= zoom and bx.overlaps(oqt.elements.quadtree_bbox(a,0))]
         print_sameline('load %d tiles,' % (len(locs),))
         
         ans=[]
@@ -206,13 +189,12 @@ class SqliteTilesBase(object):
                 self.views=views
         else:
         
-            if style is None:
-                style=oqt.geometry.style.GeometryStyle()
-                
+            
+            style = style or {}
             self.cols = [
-                prep_table_point(style),
-                prep_table_line(style),
-                prep_table_polygon(style)]
+                prep_table_point(**style),
+                prep_table_line(**style),
+                prep_table_polygon(**style)]
                 
             self.views=default_views
             if extended:
@@ -363,9 +345,9 @@ class SqliteStore:
             return self.cols[1] 
         return None
     
-    def add_mvt(self, tx, ty, tz, data, minzoom=None):
+    def add_mvt(self, tx, ty, tz, data, minzoom=None,merge_geoms=False,pass_geoms=False):
         
-        return _oqtsqlite.insert_mvt_tile(self.conn, lambda c: self.get_col(c), data, tx, ty, tz, True, minzoom)
+        return _oqtsqlite.insert_mvt_tile(self.conn, lambda c: self.get_col(c), data, tx, ty, tz, True, minzoom,merge_geoms,pass_geoms)
         
         
     def add_mvt_old(self, tx, ty, tz, data, minzoom=None):
@@ -430,7 +412,7 @@ class SqliteStore:
 
 
 class SqliteTilesMvt(SqliteTilesBase):
-    def __init__(self, tiles, bounds, style=None, extended=False, cols=None,views=None,table_prfx=None):
+    def __init__(self, tiles, bounds, style=None, extended=False, cols=None,views=None,table_prfx=None,merge_geoms=False, pass_geoms=False):
         super(SqliteTilesMvt,self).__init__(bounds,style,extended,cols,views)
         
         self.table_prfx=table_prfx
@@ -439,6 +421,8 @@ class SqliteTilesMvt(SqliteTilesBase):
         
         self.minzoom=int(self.tiles.minzoom or 0)
         self.maxzoom=int(self.tiles.maxzoom or 14)
+        self.merge_geoms=merge_geoms
+        self.pass_geoms=pass_geoms
         
     def prep_sqlitestore(self, bx, zoom):
         
@@ -460,7 +444,7 @@ class SqliteTilesMvt(SqliteTilesBase):
                     dds=str(dd)
                     nt+=1
                     tl+=len(dds)
-                    cc+=data.add_mvt(tx,ty,tz,dds,zoom)
+                    cc+=data.add_mvt(tx,ty,tz,dds,zoom,self.merge_geoms,self.pass_geoms)
                     
         print('read %2d tiles [%6.1fkb], added %6d feats in %4.1fs' % (nt,tl/1024.0,cc,time.time()-st))
         return data, cc
@@ -478,6 +462,7 @@ class AltDs:
         self.msgs=msgs
         self.times=[]
         self.split_multigeoms=split_multigeoms
+       
     
     def __call__(self, query):
         try:

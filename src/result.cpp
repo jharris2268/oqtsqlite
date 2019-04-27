@@ -5,6 +5,9 @@
 
 #include "result.hpp"
 #include <set>
+#include "mvt.hpp"
+#include <oqt/utils/pbf/protobuf.hpp>
+#include <oqt/utils/pbf/packedint.hpp>
 
 class PythonResult {
     public:
@@ -80,6 +83,104 @@ class vector_featureset : public mapnik::Featureset {
         size_t idx;
 };
 
+
+mapnik::geometry::line_string<double> make_line_string(const std::vector<std::pair<double,double>>& coords) {
+    mapnik::geometry::line_string<double> line(coords.size());
+    for (size_t i=0; i < coords.size(); i++) {
+        line[i] = mapnik::geometry::point<double>(coords[i].first,coords[i].second);
+    }
+    return line;
+};
+
+mapnik::geometry::linear_ring<double> make_ring(const std::vector<std::pair<double,double>>& coords) {
+    mapnik::geometry::linear_ring<double> line(coords.size());
+    for (size_t i=0; i < coords.size(); i++) {
+        line[i] = mapnik::geometry::point<double>(coords[i].first,coords[i].second);
+    }
+    return line;
+};
+
+mapnik::geometry::geometry<double> make_mapnik_geometry_from_mvt(const std::string& data) {
+    
+    size_t pos=0;
+    auto tg = oqt::read_pbf_tag(data,pos);
+    
+    size_t gt=0;
+    std::vector<oqt::uint64> cmds;
+    size_t np=0;
+    std::vector<oqt::uint64> tile_xyz;
+    
+        
+    for ( ;  tg.tag>0; tg = oqt::read_pbf_tag(data,pos)) {
+        if (tg.tag==3) { gt = tg.value; }
+        if (tg.tag==4) { cmds = oqt::read_packed_int(tg.data); }
+        if (tg.tag==5) { np = tg.value; }
+        if (tg.tag==6) { tile_xyz = oqt::read_packed_int(tg.data); }
+    }
+    
+    transform_func forward;
+    if (tile_xyz.size()==3) {
+        forward = make_transform(tile_xyz[0], tile_xyz[1], tile_xyz[2]);
+    } else {
+        forward = [](double x, double y, double npi) { return std::make_pair(x*256./npi, y*256./npi); };
+    }
+    
+    auto rings = read_rings(forward, np, cmds, gt);
+    
+    if (rings.size()==0) {
+        return mapnik::geometry::geometry_collection<double>();
+    }
+    
+    if (gt==1) {
+        if (rings.size()==1) {
+            return mapnik::geometry::point<double>(rings[0][0].first,rings[0][0].second);
+        } else {
+            mapnik::geometry::multi_point<double> multi;
+            multi.reserve(rings.size());
+            for (const auto& r: rings) {
+                multi.emplace_back(mapnik::geometry::point<double>(r[0].first, r[0].second));
+            }
+            return multi;
+        }
+    } else if (gt==2) {
+        if (rings.size()==1) {
+            return make_line_string(rings[0]);
+        } else {
+            mapnik::geometry::multi_line_string<double> multi;
+            multi.reserve(rings.size());
+            for (const auto& r: rings) {
+                multi.push_back(make_line_string(r));
+            }
+            return multi;
+        }
+    } else if (gt==3) {
+        mapnik::geometry::multi_polygon<double> multi;
+        mapnik::geometry::polygon<double> poly;
+        for (const auto& r: rings) {
+            if (ring_area(r)<0) {
+                poly.emplace_back(make_ring(r));
+            } else {
+                if (!poly.empty()) {
+                    multi.emplace_back(poly);
+                    poly = mapnik::geometry::polygon<double>();
+                }
+                poly.emplace_back(make_ring(r));
+            }
+        }
+        if (!poly.empty()) {
+            if (multi.empty()) {
+                return poly;
+            }
+        } else {
+            multi.emplace_back(poly);
+            return multi;
+        }
+    }
+    return mapnik::geometry::geometry_collection<double>();
+}            
+        
+
+
 mapnik::featureset_ptr make_featureset(std::vector<mapnik::feature_ptr>&& feats) {
     return std::make_shared<vector_featureset>(std::move(feats));
 }
@@ -149,7 +250,13 @@ class FeatureVectorResult {
                         //pass;
                     } else {
                         const char *data = static_cast<const char *>(sqlite3_column_blob(curs, way_col));
-                        feat->set_geometry(mapnik::geometry_utils::from_wkb(data, l));
+                        
+                        if (data[0] == '\x18') {
+                            feat->set_geometry( make_mapnik_geometry_from_mvt(std::string(data, l)) );
+                        } else {
+                        
+                            feat->set_geometry(mapnik::geometry_utils::from_wkb(data, l));
+                        }
                     }
                 }
             }

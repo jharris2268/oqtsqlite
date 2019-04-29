@@ -3,6 +3,7 @@
 #include <string>
 #include <iostream>
 #include <regex>
+#include <cmath>
 
 #include "oqt/utils/pbf/fixedint.hpp"
 
@@ -316,6 +317,39 @@ static void pixel_area(sqlite3_context *context, int argc, sqlite3_value **argv)
 double get_pixel_area() { return curr_pixel_area; }
 void set_pixel_area(double d) { curr_pixel_area=d; }
 
+static void power_call(sqlite3_context *context, int argc, sqlite3_value **argv) {
+    if (argc<2) {
+        return sqlite3_result_null(context);
+    }
+    
+    int type0 = sqlite3_value_type(argv[0]);
+    int type1 = sqlite3_value_type(argv[1]);
+    if (! ((type0==SQLITE_INTEGER)  || (type0==SQLITE_FLOAT))) {
+        return sqlite3_result_null(context);
+    }
+    if (! ((type1==SQLITE_INTEGER)  || (type1==SQLITE_FLOAT))) {
+        return sqlite3_result_null(context);
+    }
+    
+    double v0, v1;
+    if (type0 == SQLITE_INTEGER) {
+        v0 = sqlite3_value_int(argv[0]);
+    } else {
+        v0 = sqlite3_value_double(argv[0]);
+    }
+    
+    if (type1 == SQLITE_INTEGER) {
+        v1 = sqlite3_value_int(argv[1]);
+    } else {
+        v1 = sqlite3_value_double(argv[1]);
+    }
+    
+    double result = pow(v0, v1);
+    
+    return sqlite3_result_double(context, result);
+}
+
+
 void register_functions(sqlite3* sqlite_conn) {
     
 
@@ -329,6 +363,9 @@ void register_functions(sqlite3* sqlite_conn) {
     
     sqlite3_create_function(sqlite_conn, "regex_call", 2, SQLITE_UTF8, nullptr, regex_call, nullptr, nullptr);
     sqlite3_create_function(sqlite_conn, "pixel_area", 0, SQLITE_UTF8, nullptr, pixel_area, nullptr, nullptr);
+    
+    sqlite3_create_function(sqlite_conn, "power", 2, SQLITE_UTF8, nullptr, power_call, nullptr, nullptr);
+    
 
 }
 

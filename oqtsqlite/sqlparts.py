@@ -394,7 +394,54 @@ class PixelArea(Base):
     def __call__(self, feat, zoom):
         return (zoom0 / 2.0**zoom) ** 2
     
+class PixelSize(Base):
+    name = 'PixelSize'
+    params = []
     
+    @property
+    def Key(self):
+        return 'pixel_size'
+    
+    @property
+    def sqlite(self):
+        return ':pixel_size:'
+    
+    def __call__(self, feat, zoom):
+        return (zoom0 / 2.0**zoom) 
+
+
+class ScaleDenominator(Base):
+    name = 'ScaleDenominator'
+    params = []
+    
+    @property
+    def Key(self):
+        return 'scale_denominator'
+    
+    @property
+    def sqlite(self):
+        return ':scale_denominator:'
+    
+    def __call__(self, feat, zoom):
+        return (zoom0 / 2.0**zoom) / 0.00028
+
+class Power(Base):
+    name = 'Power'
+    params = ['Left','Right']
+    
+    @property
+    def Key(self):
+        return 'power'
+    
+    @property
+    def sqlite(self):
+        return "power(%s, %s)" % (self.Left.sqlite, self.right.sqlite)
+    
+    def __call__(self, feat, zoom):
+        l = self.Left(feat,zoom)
+        r = self.Right(feat,zoom)
+        return l**r
+        
         
 class SubStr(Base):
     name = 'SubStr'

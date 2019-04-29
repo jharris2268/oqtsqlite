@@ -218,7 +218,12 @@ class Visitor(PTNodeVisitor):
             return sq.NullIf(c[1][0],c[1][1])
         elif fn == 'pixel_area':
             return sq.PixelArea()
+        elif fn == 'pixel_size':
+            return sq.PixelSize()
+        elif fn == 'scale_denominator':
+            return sq.ScaleDenominator
         
+            
         elif fn in ('char_length', 'length'):
             return sq.StringLength(c[1][0])
         
@@ -242,6 +247,15 @@ class Visitor(PTNodeVisitor):
         
         elif fn == 'round':
             return sq.AsInteger(c[1][0])
+            
+        elif fn == 'pow':
+            return sq.Power(c[1][0], c[1][1])
+        
+        elif fn == 'md5':
+            return sq.StringValue('c')
+        elif fn == 'ascii':
+            return sq.IntegerValue(99)
+        
         print('other func', fn)
         
 
@@ -451,6 +465,10 @@ def clean_query(s):
     s=s.replace("!pixel_width!*!pixel_height!","pixel_area()")
     s=s.replace("!pixel_width!::real*!pixel_height!::real","pixel_area()")
     s=s.replace("!pixel_width!::real","pixel_size()")
+    s=s.replace("!pixel_width!","pixel_size()")
+    s=s.replace("!pixel_height!","pixel_size()")    
+    s=s.replace("!scale_denominator!::real","scale_denominator()")
+    s=s.replace("!scale_denominator!","scale_denominator()")
     #s=s.replace("layer~E'^-?\\\\d+$'","layer is not null")
     #s=s.replace("ele ~ \'^-?\\d{1,4}(\\.\\d+)?$\'", "ele is not null")
     #s=s.replace("population ~ '^[0-9]{1,8}$'", "population is not null")

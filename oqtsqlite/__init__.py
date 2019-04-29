@@ -278,8 +278,12 @@ class SqliteStore:
         self.conn = _oqtsqlite.SqliteDb(":memory:" if fn is None else fn)
         
         self.pixel_area='1.0'
+        self.pixel_size='1.0'
+        self.scale_denominator='3500.0'
         if zoom is not None:
             self.pixel_area='%0.1f' % (mk.zoom(zoom)**2,)
+            self.pixel_size='%0.1f' % (mk.zoom(zoom),)
+            self.scale_denominator='%0.1f' % (mk.zoom(zoom)/0.00028,)
         
             
         if not exists:            
@@ -403,6 +407,8 @@ class SqliteStore:
     def __call__(self, qu, ctx=None):
         
         qu_fix = qu.replace(':pixel_area:', self.pixel_area)
+        qu_fix = qu.replace(':pixel_size:', self.pixel_size)
+        qu_fix = qu.replace(':scale_denominator:', self.scale_denominator)
         
         
         if ctx is None:

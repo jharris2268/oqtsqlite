@@ -435,7 +435,7 @@ class Power(Base):
     
     @property
     def sqlite(self):
-        return "power(%s, %s)" % (self.Left.sqlite, self.right.sqlite)
+        return "power(%s, %s)" % (self.Left.sqlite, self.Right.sqlite)
     
     def __call__(self, feat, zoom):
         l = self.Left(feat,zoom)

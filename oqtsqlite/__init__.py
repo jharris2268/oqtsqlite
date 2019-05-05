@@ -77,7 +77,7 @@ def prep_table_polygon(way_cols=default_node_cols, all_other_tags=True,tabname='
     
 default_views = [
     "create view planet_osm_highway as select * from planet_osm_line where z_order is not null and z_order!=0",
-    "create view planet_osm_boundary as select osm_id,part,tile,quadtree,name,admin_level,boundary,minzoom, way from planet_osm_polygon where osm_id<0 and boundary='administrative'",
+    "create view planet_osm_boundary as select osm_id,part,tile,quadtree,name,ref,admin_level,boundary,minzoom, way_area,way from planet_osm_polygon where osm_id<0 and boundary='administrative'",
     "create view planet_osm_building as select * from planet_osm_polygon where building is not null and building != 'no'",
 ]
 
@@ -199,11 +199,11 @@ class SqliteTilesBase(object):
             self.views=default_views
             if extended:
                 self.cols += [
-                    prep_table_line(style, 'planet_osm_highway'),
-                    prep_table_line(style, 'planet_osm_polygon_exterior'),
-                    prep_table_polygon(style, 'planet_osm_building'),
-                    prep_table_polygon(style, 'planet_osm_boundary',set(['name','admin_level','boundary'])),
-                    prep_table_polygon(style, 'planet_osm_polypoint')]
+                    prep_table_line(style, True, 'planet_osm_highway'),
+                    prep_table_line(style, True, 'planet_osm_polygon_exterior'),
+                    prep_table_polygon(style, True, 'planet_osm_building'),
+                    prep_table_polygon(style, False, 'planet_osm_boundary',set(['name','admin_level','boundary','ref','way_area'])),
+                    prep_table_polygon(style, True, 'planet_osm_polypoint')]
                 self.views=[]
         
         self.bounds=bounds
@@ -407,8 +407,8 @@ class SqliteStore:
     def __call__(self, qu, ctx=None):
         
         qu_fix = qu.replace(':pixel_area:', self.pixel_area)
-        qu_fix = qu.replace(':pixel_size:', self.pixel_size)
-        qu_fix = qu.replace(':scale_denominator:', self.scale_denominator)
+        qu_fix = qu_fix.replace(':pixel_size:', self.pixel_size)
+        qu_fix = qu_fix.replace(':scale_denominator:', self.scale_denominator)
         
         
         if ctx is None:

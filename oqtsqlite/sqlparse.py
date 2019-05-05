@@ -221,7 +221,7 @@ class Visitor(PTNodeVisitor):
         elif fn == 'pixel_size':
             return sq.PixelSize()
         elif fn == 'scale_denominator':
-            return sq.ScaleDenominator
+            return sq.ScaleDenominator()
         
             
         elif fn in ('char_length', 'length'):
@@ -464,6 +464,9 @@ def clean_query(s):
     s="\n".join(l[:l.find('--')] if '--' in l else l for l in s.split("\n"))
     s=s.replace("!pixel_width!*!pixel_height!","pixel_area()")
     s=s.replace("!pixel_width!::real*!pixel_height!::real","pixel_area()")
+    s=s.replace("!pixel_area!::real","pixel_area()")
+    s=s.replace("!pixel_area!","pixel_area()")
+    s=s.replace(":pixel_area:","pixel_area()")
     s=s.replace("!pixel_width!::real","pixel_size()")
     s=s.replace("!pixel_width!","pixel_size()")
     s=s.replace("!pixel_height!","pixel_size()")    

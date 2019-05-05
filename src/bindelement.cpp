@@ -575,7 +575,7 @@ void call_simplepolygon(std::shared_ptr<BindElement2> be, sqlite3_stmt* curs, st
 
 void call_complicatedpolygon(std::shared_ptr<BindElement2> be, sqlite3_stmt* curs, std::shared_ptr<oqt::geometry::ComplicatedPolygon> py, int64_t tile_qt) {
     be->bind_id(curs, -1*py->Id());
-    be->bind_part(curs, py->Part());
+    //be->bind_part(curs, py->Part());
     
     oqt::tagvector others;
     

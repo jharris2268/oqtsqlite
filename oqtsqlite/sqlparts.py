@@ -729,7 +729,7 @@ class Op(Base):
 
 class RegEx(Base):
     type = 'Where'
-    name = "Op"
+    name = "RegEx"
     params = ['Column', 'Match']
     
     @property

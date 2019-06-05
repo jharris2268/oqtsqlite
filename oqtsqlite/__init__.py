@@ -203,7 +203,7 @@ class SqliteTilesBase(object):
                     prep_table_line(style, True, 'planet_osm_polygon_exterior'),
                     prep_table_polygon(style, True, 'planet_osm_building'),
                     prep_table_polygon(style, False, 'planet_osm_boundary',set(['name','admin_level','boundary','ref','way_area'])),
-                    prep_table_polygon(style, True, 'planet_osm_polypoint')]
+                    prep_table_polygon(style, True, 'planet_osm_polygon_point')]
                 self.views=[]
         
         self.bounds=bounds
@@ -338,6 +338,8 @@ class SqliteStore:
     
     
     def get_col(self, tab):
+        if tab=='polypoint':
+            tab='polygon_point'
         for c in self.cols:
             if c.table_name==self.table_prfx+tab:
                 return c

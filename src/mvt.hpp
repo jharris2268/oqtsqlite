@@ -7,6 +7,7 @@
 
 typedef std::function<std::pair<double,double>(double,double,double)> transform_func;
 transform_func make_transform(int64_t tx, int64_t ty, int64_t tz);
+std::vector<blob> read_mvt_geometry(const transform_func& forward, int64_t np, oqt::uint64 gt, const std::vector<oqt::uint64>& cmds);
 
 int64_t read_value_integer(const std::string& data);
 double read_value_double(const std::string& data);

@@ -108,7 +108,9 @@ PYBIND11_PLUGIN(_oqtsqlite) {
     
     m.def("read_value", mvt_value_py);
     m.def("read_mvt_geometry_packed", &read_mvt_geometry_packed);
-    
+    m.def("read_mvt_geometry", &read_mvt_geometry);
+    m.def("make_transform", &make_transform);
+    m.def("make_mapnik_geometry_from_mvt", &make_mapnik_geometry_from_mvt);
     return m.ptr();
 }
 

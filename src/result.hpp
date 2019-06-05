@@ -16,4 +16,6 @@ std::function<bool(sqlite3_stmt*)> make_featurevector_result(
     std::vector<mapnik::feature_ptr>& result, mapnik::context_ptr ctx);
 mapnik::featureset_ptr make_featureset(std::vector<mapnik::feature_ptr>&& result);
 
+mapnik::geometry::geometry<double> make_mapnik_geometry_from_mvt(const std::string& data);
+
 #endif

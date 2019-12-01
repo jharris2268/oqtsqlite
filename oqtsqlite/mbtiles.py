@@ -177,13 +177,13 @@ class MBTiles(object):
         if self.alt_schema:
             if replace:
                 self.curs.execute("delete from tile_data where x=? and y=? and z=?", (x,y,z))
-            self.curs.execute("insert into tile_data values (?,?,?,?,?,?)", (basetile,tile,x,y,z,None if data is None else buffer(data)))
+            self.curs.execute("insert into tile_data values (?,?,?,?,?,?)", (basetile,tile,x,y,z,None if data is None else memoryview(data)))
             
             
         else:
             if replace:
                 self.curs.execute("delete from tile_data where tile_column=? and tile_row=? and zoom_level=?", (x,y,z))
-            self.curs.execute("insert into tiles values (?,?,?,?)", (z,x,y,None if data is None else buffer(data)))
+            self.curs.execute("insert into tiles values (?,?,?,?)", (z,x,y,None if data is None else memoryview(data)))
         if not self.trans:
             self.conn.commit()
         

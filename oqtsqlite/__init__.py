@@ -26,7 +26,7 @@ import math, os, json, time
 import pymapnik11 as mk
 from .utils import time_op, print_sameline
 import oqt
-from . import sqlparse, _oqtsqlite
+from . import sqlparse, _oqtsqlite, mbtiles
 #import sqlselect
 #import oqttiles as ot
 
@@ -98,7 +98,7 @@ class TilesFilter:
             self.tiles[t.Quadtree][0].append(t)
 
     def __call__(self, bx,zoom):      
-        for k,v in sorted(self.tiles.iteritems()):
+        for k,v in sorted(self.tiles.items()):
             if (k&31) <= zoom and bx.overlaps_quadtree(k):
                 v[1]=self.cnt
                 for t in v[0]:
@@ -141,7 +141,7 @@ class TilesCacheFile(TilesFilter):
         
         if len(locs)+len(self.tiles)>self.max_tiles:
             torm=len(locs)+len(self.tiles)-self.max_tiles
-            rm=[(c,a) for a,(b,c) in self.tiles.iteritems() if not a in ts]
+            rm=[(c,a) for a,(b,c) in self.tiles.items() if not a in ts]
             rm.sort()
             
             rm=rm[:torm]
@@ -180,7 +180,7 @@ class TilesSlim:
         return ans
     
 class SqliteTilesBase(object):
-    def __init__(self, bounds, style=None, extended=False, cols=None, views=None):
+    def __init__(self, bounds, style=None, extended=False, cols=None, views=None,shapetables={}):
         
         if not cols is None:
             self.cols=cols
@@ -194,7 +194,8 @@ class SqliteTilesBase(object):
             self.cols = [
                 prep_table_point(**style),
                 prep_table_line(**style),
-                prep_table_polygon(**style)]
+                prep_table_polygon(**style)
+            ]
                 
             self.views=default_views
             if extended:
@@ -203,8 +204,13 @@ class SqliteTilesBase(object):
                     prep_table_line(style, True, 'planet_osm_polygon_exterior'),
                     prep_table_polygon(style, True, 'planet_osm_building'),
                     prep_table_polygon(style, False, 'planet_osm_boundary',set(['name','admin_level','boundary','ref','way_area'])),
-                    prep_table_polygon(style, True, 'planet_osm_polygon_point')]
+                    prep_table_polygon(style, True, 'planet_osm_polygon_point')
+                ]
                 self.views=[]
+        
+        if shapetables:
+            for k,v in shapetables.items():
+                self.cols.append(_oqtsqlite.BindElement2(v, 'planet_osm_'+k))
         
         self.bounds=bounds
         self.prev=None
@@ -226,8 +232,8 @@ class SqliteTilesBase(object):
         
     
 class SqliteTiles(SqliteTilesBase):
-    def __init__(self, tiles, bounds=None,style=None, extended=False,cols=None, views=None):
-        super(SqliteTiles,self).__init__(bounds,style,extended,cols, views)
+    def __init__(self, tiles, bounds=None,style=None, extended=False,cols=None, views=None, shapetables={}):
+        super(SqliteTiles,self).__init__(bounds,style,extended,cols, views,shapetables)
         self.tiles=tiles
         self.prev=None
         if bounds is None:
@@ -385,7 +391,7 @@ class SqliteStore:
                                             
                     pp = {'osm_id': feat.id, 'minzoom': feat.minzoom, 'tile':tile_qt}
                     
-                    for k,v in feat.properties.iteritems():
+                    for k,v in feat.properties.items():
                         if not v: continue
                         
                         if k=='way_length': k='length'
@@ -420,8 +426,8 @@ class SqliteStore:
 
 
 class SqliteTilesMvt(SqliteTilesBase):
-    def __init__(self, tiles, bounds, style=None, extended=False, cols=None,views=None,table_prfx=None,merge_geoms=False, pass_geoms=False):
-        super(SqliteTilesMvt,self).__init__(bounds,style,extended,cols,views)
+    def __init__(self, tiles, bounds, style=None, extended=False, cols=None,views=None,table_prfx=None,merge_geoms=False, pass_geoms=False, shapetables={}):
+        super(SqliteTilesMvt,self).__init__(bounds,style,extended,cols,views, shapetables)
         
         self.table_prfx=table_prfx
         
@@ -445,11 +451,11 @@ class SqliteTilesMvt(SqliteTilesBase):
         print_sameline('%-50.50s zoom %2d: tile range: %8.2f,%8.2f,%2d => %8.2f, %8.2f,%2d: ' % (bx,zoom,minx,miny,tz,maxx,maxy,tz))
         data=SqliteStore(self.cols,zoom=zoom,views=self.views, table_prfx=self.table_prfx)
         cc,nt,tl=0,0,0
-        for tx in xrange(int(minx),int(maxx)+1):
-            for ty in xrange(int(miny),int(maxy)+1):
+        for tx in range(int(minx),int(maxx)+1):
+            for ty in range(int(miny),int(maxy)+1):
                 dd=self.tiles(tx,ty,tz)
                 if dd:
-                    dds=str(dd)
+                    dds=bytes(dd)
                     nt+=1
                     tl+=len(dds)
                     cc+=data.add_mvt(tx,ty,tz,dds,zoom,self.merge_geoms,self.pass_geoms)
@@ -498,7 +504,9 @@ class AltDs:
         mp.layers[i].datasource = mk.make_python_datasource({'type':'python', 'query': str(self.query)}, self.envelope, self.geom_type, self)
     
 
-def convert_postgis_to_altds(mp, tiles, tabpp=None):
+
+
+def convert_postgis_to_altds(mp, tiles, tabpp=None, convert_shapefiles=None):
     dses={}
     
     tm=[]
@@ -515,10 +523,21 @@ def convert_postgis_to_altds(mp, tiles, tabpp=None):
                 dses[i] = AltDs(tiles, mm, idx=i)
             except Exception as ex:
                 print('layer %d failed: %s' % (i,ex))
-    
-    
-    for k,v in dses.iteritems():
-        v.set_to_layer(mp, k)
+        elif convert_shapefiles is not None and l.datasource.params()['type']=='shape':
+            fn = l.datasource.params()['file']
+            fna,fnb = os.path.split(fn)
+            if fnb in convert_shapefiles:
+                qq='select * from (select * from planet_osm_%s) as oo' % (convert_shapefiles[fnb],)
+                t,mm=time_op(query_to_sqlite,qq)
+                tm.append((i,t))
+                dses[i]=AltDs(tiles, mm, idx=i)
+            else:
+                dses[i]=None
+    for k,v in dses.items():
+        if v:
+            v.set_to_layer(mp, k)
+        else:
+            mp.layers[k].datasource=mk.make_python_datasource({'type':'python'}, tiles.bounds, mk.datasource_geometry_t.Unknown, lambda *a: mk.make_python_featureset([]))
     
     return dses
         

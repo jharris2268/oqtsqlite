@@ -24,7 +24,7 @@ from __future__ import unicode_literals, print_function
 from arpeggio import *
 from arpeggio import RegExMatch as _
 import collections, json
-import sqlparts as sq
+from . import sqlparts as sq
 
 def get_comparision_op(opf):
     return opf
@@ -51,8 +51,8 @@ def label():        return Optional([StrMatch("p."),StrMatch("l.")]),[unq_label,
 def function():     return unq_label,"(",Optional(valuelist),")"
 
 
-def calculation():  return map(StrMatch,['->>','->','||','*','+','-','/','%',])
-def operation():    return map(StrMatch,['==','<>','<=','>=','<','>','=','!=','~','?','@>'])
+def calculation():  return [StrMatch(x) for x in ('->>','->','||','*','+','-','/','%',)]
+def operation():    return [StrMatch(x) for x in ('==','<>','<=','>=','<','>','=','!=','~','?','@>',)]
 
 
 

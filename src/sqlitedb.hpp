@@ -12,6 +12,11 @@ struct blob {
 int bind_obj(sqlite3_stmt* curs, py::object obj, int col);
 bool call_bind_values(sqlite3_stmt* curs, py::object binds);
 
+
+struct sqlite3_wrap {
+    sqlite3* conn;
+};
+
 class SqliteDb {
     
     public:
@@ -22,7 +27,8 @@ class SqliteDb {
         mapnik::featureset_ptr execute_featureset(const std::string& sql, mapnik::context_ptr ctx, py::object binds);
         size_t prepare_step_finalize(const std::string& sql, std::function<bool(sqlite3_stmt*)> bind_vals, std::function<bool(sqlite3_stmt*)> read_row);
         void call_error(const std::string& msg);
-    
+        
+        sqlite3_wrap connection() { return sqlite3_wrap{sqlite_conn}; }
     private:
         sqlite3* sqlite_conn;
         

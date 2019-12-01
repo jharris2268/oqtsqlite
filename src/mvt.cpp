@@ -633,7 +633,9 @@ mvt_feature read_mvt_feature(
                 oqt::PbfTag{6,0,tile_key}
             }));
     } else {
-        feat.geometries=read_mvt_geometry(forward, np, gt, oqt::read_packed_int(cmds));
+        try {
+            feat.geometries=read_mvt_geometry(forward, np, gt, oqt::read_packed_int(cmds));
+        } catch (...) {}
     }
     return feat;
 }       
@@ -674,7 +676,12 @@ void read_mvt_layer(data_map& result, const transform_func& forward, const std::
     auto& features = result[table];
     features.reserve(features.size()+feature_blobs.size());
     for (const auto& f: feature_blobs) {
-        features.push_back(read_mvt_feature(forward, np, keys, vals, f, pass_geoms, tile_key));
+        auto feat = read_mvt_feature(forward, np, keys, vals, f, pass_geoms, tile_key);
+        if (feat.geometries.empty()) {
+            //pass
+        } else {
+            features.push_back(feat);
+        }
     }
     
     

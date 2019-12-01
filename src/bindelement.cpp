@@ -688,7 +688,7 @@ size_t extended_get_tables(oqt::ElementPtr ele) {
 }
 
 std::vector<std::string> extended_table_names() {
-    return {"point","line","polygon","highway","building","boundary","polypoint"};
+    return {"point","line","polygon","highway","building","boundary","polygon_point"};
 }
 /*
 std::vector<size_t> insert_block(

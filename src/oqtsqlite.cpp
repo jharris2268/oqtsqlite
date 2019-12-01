@@ -4,6 +4,7 @@
 #include <pybind11/functional.h>
 
 #include "sqlitedb.hpp"
+#include <sqlite3.h>
 #include "bindelement.hpp"
 #include "mvt.hpp"
 
@@ -37,18 +38,47 @@ py::dict mvt_feature_properties_py(const mvt_feature& feat) {
     
 }
 
+py::object unpack_mapnik_geometry(const mapnik::geometry::geometry<double>& mg);
+
+struct geom_visitor {
+    py::object operator()(const mapnik::geometry::geometry_empty&) { return py::object(); }
+    py::object operator()(const mapnik::geometry::point<double>& a) { return py::cast(a); }
+    py::object operator()(const mapnik::geometry::line_string<double>& a) { return py::cast(a); }
+    py::object operator()(const mapnik::geometry::polygon<double>& a) { return py::cast(a); }
+    py::object operator()(const mapnik::geometry::multi_point<double>& a) { return py::cast(a); }
+    py::object operator()(const mapnik::geometry::multi_line_string<double>& a)  { return py::cast(a); }
+    py::object operator()(const mapnik::geometry::multi_polygon<double>& a) { return py::cast(a); }
+    py::object operator()(const mapnik::geometry::geometry_collection<double>& a) {
+        py::list res;
+        for (const auto& g: a) {
+            res.append(unpack_mapnik_geometry(g));
+        }
+        return res;
+    }
+};  
+
+py::object unpack_mapnik_geometry(const mapnik::geometry::geometry<double>& mg) {
+    
+    geom_visitor vis;
+    return mapnik::util::apply_visitor(vis, mg);
+}
+    
 
 
 PYBIND11_DECLARE_HOLDER_TYPE(XX, std::shared_ptr<XX>);
 
-void export_mvt(py::module& m);
+
 PYBIND11_PLUGIN(_oqtsqlite) {
     py::module m("_oqtsqlite", "pybind11 example plugin");
+    
+    
+    py::class_<sqlite3_wrap>(m,"sqlite3_wrap");
     
     py::class_<SqliteDb, std::shared_ptr<SqliteDb>>(m,"SqliteDb")
         .def(py::init<std::string>())
         .def("execute", &SqliteDb::execute, py::arg("sql"), py::arg("binds")=py::none())
         .def("execute_featureset", &SqliteDb::execute_featureset, py::arg("sql"), py::arg("ctx"), py::arg("binds")=py::none())
+        .def("connection", &SqliteDb::connection)
     ;
     
     py::class_<blob>(m,"blob")
@@ -110,7 +140,9 @@ PYBIND11_PLUGIN(_oqtsqlite) {
     m.def("read_mvt_geometry_packed", &read_mvt_geometry_packed);
     m.def("read_mvt_geometry", &read_mvt_geometry);
     m.def("make_transform", &make_transform);
-    m.def("make_mapnik_geometry_from_mvt", &make_mapnik_geometry_from_mvt);
+    //m.def("make_mapnik_geometry_from_mvt", [](const std::string& s) -> py::object { return unpack_mapnik_geometry(make_mapnik_geometry_from_mvt(s)); });
+    m.def("read_rings", &read_rings);
+    m.def("ring_area", ring_area);
     return m.ptr();
 }
 

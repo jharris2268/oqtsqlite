@@ -102,6 +102,29 @@ mapnik::geometry::linear_ring<double> make_ring(const std::vector<std::pair<doub
 
 mapnik::geometry::geometry<double> make_mapnik_geometry_from_mvt(const std::string& data) {
     
+    
+    mapnik::geometry::geometry_collection<double> ll;
+    try {
+        auto geoms = read_mvt_geometry_packed(data);
+    
+        
+        
+        if (geoms.size()==1) {
+            return mapnik::geometry_utils::from_wkb(geoms[0].s.data(), geoms[0].s.size());
+        }
+        
+        
+        for (const auto& g: geoms) {
+            ll.push_back(mapnik::geometry_utils::from_wkb(g.s.data(), g.s.size()));
+        }
+    } catch (...) {}
+    
+    return ll;      
+    
+    
+    /*
+    
+    
     size_t pos=0;
     auto tg = oqt::read_pbf_tag(data,pos);
     
@@ -122,7 +145,7 @@ mapnik::geometry::geometry<double> make_mapnik_geometry_from_mvt(const std::stri
     if (tile_xyz.size()==3) {
         forward = make_transform(tile_xyz[0], tile_xyz[1], tile_xyz[2]);
     } else {
-        forward = [](double x, double y, double npi) { return std::make_pair(x*256./npi, y*256./npi); };
+        forward = [](double x, double y, double npi) { return std::make_pair(x*256./npi, 256.0-y*256./npi); };
     }
     
     auto rings = read_rings(forward, np, cmds, gt);
@@ -138,7 +161,7 @@ mapnik::geometry::geometry<double> make_mapnik_geometry_from_mvt(const std::stri
             mapnik::geometry::multi_point<double> multi;
             multi.reserve(rings.size());
             for (const auto& r: rings) {
-                multi.emplace_back(mapnik::geometry::point<double>(r[0].first, r[0].second));
+                multi.push_back(mapnik::geometry::point<double>(r[0].first, r[0].second));
             }
             return multi;
         }
@@ -158,25 +181,25 @@ mapnik::geometry::geometry<double> make_mapnik_geometry_from_mvt(const std::stri
         mapnik::geometry::polygon<double> poly;
         for (const auto& r: rings) {
             if (ring_area(r)<0) {
-                poly.emplace_back(make_ring(r));
+                poly.push_back(make_ring(r));
             } else {
                 if (!poly.empty()) {
-                    multi.emplace_back(poly);
+                    multi.push_back(poly);
                     poly = mapnik::geometry::polygon<double>();
                 }
-                poly.emplace_back(make_ring(r));
+                poly.push_back(make_ring(r));
             }
         }
         if (!poly.empty()) {
-            if (multi.empty()) {
-                return poly;
-            }
-        } else {
-            multi.emplace_back(poly);
-            return multi;
+            multi.push_back(poly);
         }
+        
+        if (multi.size()==1) {
+            return multi[0];
+        }
+        return multi;
     }
-    return mapnik::geometry::geometry_collection<double>();
+    return mapnik::geometry::geometry_collection<double>();*/
 }            
         
 

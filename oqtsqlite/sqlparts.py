@@ -23,11 +23,18 @@
 from __future__ import print_function
 
 import itertools
+if not hasattr(itertools,'zip_longest'):
+    itertools.zip_longest = itertools.izip_longest
+
+
 import re
+def auto_repr(self):
+    return "%s(%s)" % (self.name, ", ".join(repr(getattr(self,s)) for s in self.params))
+
 
 # This is the mataclass-defined __init__
 def auto_init(self, *args, **kwargs):
-    for arg_val, arg_name in itertools.izip_longest(args, self.params):
+    for arg_val, arg_name in itertools.zip_longest(args, self.params):
         if arg_name is None:
             raise Exception("too many arguments... for "+self.name)
         setattr(self, arg_name, arg_val)
@@ -35,18 +42,30 @@ def auto_init(self, *args, **kwargs):
     # This would allow the user to explicitly specify field values with named arguments
     self.__dict__.update(kwargs)
 
-def auto_repr(self):
-    return "%s(%s)" % (self.name, ", ".join(repr(getattr(self,s)) for s in self.params))
     
+        
+if False:
+    class MetaBase(type):
+        def __new__(cls, name, bases, attrs):
+            attrs['__init__'] = auto_init
+            attrs['__repr__'] = auto_repr
+            return super(MetaBase, cls).__new__(cls, name, bases, attrs)
 
-class MetaBase(type):
-    def __new__(cls, name, bases, attrs):
+    class Base(object):
+        __metaclass__ = MetaBase
+
+
+class MyMetaClass(type):
+    def __new__(cls, class_name, parents, attrs):
         attrs['__init__'] = auto_init
         attrs['__repr__'] = auto_repr
-        return super(MetaBase, cls).__new__(cls, name, bases, attrs)
+        return type.__new__(cls, class_name, parents, attrs)
 
-class Base(object):
-    __metaclass__ = MetaBase
+# Creates base class on-the-fly using syntax which is valid in both
+# Python 2 and 3.
+class Base(MyMetaClass("NewBaseClass", (object,), {})):
+    params = []
+
 
 zoom0 = 156543.033928125
 

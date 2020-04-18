@@ -1,6 +1,7 @@
 from setuptools import setup, Extension
 import setuptools
 import shutil, os.path, subprocess
+import pybind11
 
 def call_pkgconfig(args):
     try:
@@ -45,6 +46,7 @@ ext_modules = [
         include_dirs=[
             '/usr/local/include',
             '/home/james/work/oqtcpp/include',
+            pybind11.get_include(),
             
         ],
         extra_link_args=libs,

@@ -53,8 +53,8 @@ def prep_mbtiles_alt(conn, name, minzoom, maxzoom):
     
     curs.execute("create view tiles as select z as zoom_level, x as tile_column, y as tile_row, data as tile_data from tile_data")
     
-    curs.execute("create table summary (basetile text, timestamp text, minzoom, maxzoom, count int)");
-    
+    curs.execute("create table summary (basetile text, timestamp text, minzoom, maxzoom, count int)")
+    curs.execute("create view summary_length as select summary.basetile, summary.timestamp, summary.minzoom, summary.maxzoom, summary.count, round(f.length/1024./1024,1) as total_mb, round(f.length/summary.count/1024.0,1) as average_kb from summary, (select basetile,sum(length(data)) as length from tile_data group by basetile) as f where summary.basetile=f.basetile")
     conn.commit()
 
 

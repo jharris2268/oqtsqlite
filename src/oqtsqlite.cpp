@@ -68,8 +68,8 @@ py::object unpack_mapnik_geometry(const mapnik::geometry::geometry<double>& mg) 
 PYBIND11_DECLARE_HOLDER_TYPE(XX, std::shared_ptr<XX>);
 
 
-PYBIND11_PLUGIN(_oqtsqlite) {
-    py::module m("_oqtsqlite", "pybind11 example plugin");
+PYBIND11_MODULE(_oqtsqlite, m) {
+    
     
     
     py::class_<sqlite3_wrap>(m,"sqlite3_wrap");
@@ -143,6 +143,6 @@ PYBIND11_PLUGIN(_oqtsqlite) {
     //m.def("make_mapnik_geometry_from_mvt", [](const std::string& s) -> py::object { return unpack_mapnik_geometry(make_mapnik_geometry_from_mvt(s)); });
     m.def("read_rings", &read_rings);
     m.def("ring_area", ring_area);
-    return m.ptr();
+    
 }
 

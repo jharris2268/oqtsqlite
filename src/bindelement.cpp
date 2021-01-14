@@ -16,300 +16,6 @@ std::string as_hex(const std::string& str) {
 
 }
 
-/*        
-BindElement::BindElement(std::vector<std::string> keys, const std::string& _table_name)
-        : table_name_(_table_name),
-        osm_id(0), tile(0), quadtree(0), part(0), tags(0),
-        minzoom(0), layer(0), z_order(0), length(0), way_area(0),
-        way(0) {
-    
-    std::stringstream ss, ii;
-    ss << "create table " << table_name_ << "(";
-    ii << "insert into " << table_name_ << " values (";
-    
-    bool first=true;
-    for (size_t i=0; i < keys.size(); i++) {
-        const auto& k = keys[i];
-        if (!first) {
-            ss << ", ";
-            ii << ", ";
-            
-        }
-        first=false;
-        
-        if (k=="osm_id") {
-            osm_id = i+1;
-            ss << "osm_id integer"; ii << "?";
-        }
-        else if (k=="part") { part = i+1; ss << "part integer"; ii << "?"; }
-        else if (k=="tile") { tile = i+1; ss << "tile integer"; ii << "?";}
-        else if (k=="quadtree") { quadtree = i+1; ss << "quadtree integer"; ii << "?";}
-        else if (k=="tags") { tags = i+1; ss << "tags blob"; ii << "?";}
-        else if (k=="layer") { layer = i+1; ss << "layer integer"; ii << "?";}
-        else if (k=="z_order") { z_order = i+1; ss << "z_order integer"; ii << "?";}
-        else if (k=="minzoom") { minzoom = i+1; ss << "minzoom integer"; ii << "?";}
-        else if (k=="length") { length = i+1; ss << "length float"; ii << "?";}
-        else if (k=="way_area") { way_area = i+1; ss << "way_area integer"; ii << "?";}
-        else if (k=="way") { way = i+1; ss << "way blob"; ii << "?";}
-        else {
-            tag_keys[k] = i+1;
-            ss << '"' << k << '"';
-            ii << "?";
-        }
-    }
-    ss << ")"; ii << ")";
-    table_create_ = ss.str();
-    table_insert_ = ii.str();
-    
-}
-
-
-
-size_t BindElement::insert_element(std::shared_ptr<SqliteDb> conn, oqt::ElementPtr ele, int64_t tile_qt) {
-    
-    
-    if (ele->Type()==oqt::ElementType::Point) {
-        auto pt = std::dynamic_pointer_cast<oqt::geometry::Point>(ele);
-        conn->prepare_step_finalize(table_insert(), [this,pt,tile_qt](sqlite3_stmt* curs) { return this->call_point(pt,tile_qt,curs); },nullptr);
-        return 1;
-    } else if (ele->Type()==oqt::ElementType::Linestring) {
-        auto ln = std::dynamic_pointer_cast<oqt::geometry::Linestring>(ele);
-        conn->prepare_step_finalize(table_insert(), [this,ln,tile_qt](sqlite3_stmt* curs) { return this->call_line(ln,tile_qt,curs); },nullptr);
-        return 1;
-    } else if (ele->Type()==oqt::ElementType::SimplePolygon) {
-        auto py = std::dynamic_pointer_cast<oqt::geometry::SimplePolygon>(ele);
-        conn->prepare_step_finalize(table_insert(), [this,py,tile_qt](sqlite3_stmt* curs) { return this->call_simplepolygon(py,tile_qt,curs); },nullptr);
-        return 1;
-    } else if (ele->Type()==oqt::ElementType::ComplicatedPolygon) {
-        auto py = std::dynamic_pointer_cast<oqt::geometry::ComplicatedPolygon>(ele);
-        conn->prepare_step_finalize(table_insert(), [this,py,tile_qt](sqlite3_stmt* curs) { return this->call_complicatedpolygon(py,tile_qt,curs); },nullptr);
-        return 1;
-    }
-    
-    return 0;
-}
-
-size_t BindElement::insert_python(std::shared_ptr<SqliteDb> conn, const std::map<std::string,py::object>& props) {
-    
-    conn->prepare_step_finalize(table_insert(), [this,props](sqlite3_stmt* curs) { return this->call_python(props,curs); },nullptr);
-    return 1;
-    
-}
-
-
-bool BindElement::call_point(std::shared_ptr<oqt::geometry::Point> pt, int64_t tile_qt, sqlite3_stmt* curs) {
-    
-    if (osm_id!=0) {
-        sqlite3_bind_int64(curs, osm_id, pt->Id());
-    }
-    
-    if (!call_common(pt, tile_qt, curs)) {
-        return false;
-    }
-    return true;
-}
-
-bool BindElement::call_line(std::shared_ptr<oqt::geometry::Linestring> ln, int64_t tile_qt, sqlite3_stmt* curs) {
-    if (osm_id!=0) {
-        if (sqlite3_bind_int64(curs, osm_id, ln->Id())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    if (!call_common(ln, tile_qt, curs)) {
-        return false;
-    }
- 
-    if (layer) { 
-        if (sqlite3_bind_int64(curs, layer, ln->Layer())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    if (z_order) {
-        if (sqlite3_bind_int64(curs, z_order, ln->ZOrder())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    if (length) { 
-        if (sqlite3_bind_double(curs, length, ln->Length())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    return true;
-    
-}
-
-bool BindElement::call_simplepolygon(std::shared_ptr<oqt::geometry::SimplePolygon> py, int64_t tile_qt, sqlite3_stmt* curs) {
-    if (osm_id!=0) {
-        if (sqlite3_bind_int64(curs, osm_id, py->Id())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    if (!call_common(py, tile_qt, curs)) {
-        return false;
-    }
- 
-    if (layer) { 
-        if (sqlite3_bind_int64(curs, layer, py->Layer())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    if (z_order) {
-        if (sqlite3_bind_int64(curs, z_order, py->ZOrder())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    if (way_area) { 
-        if (sqlite3_bind_double(curs, way_area, py->Area())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    return true;
-    
-}
-
-bool BindElement::call_complicatedpolygon(std::shared_ptr<oqt::geometry::ComplicatedPolygon> py, int64_t tile_qt, sqlite3_stmt* curs) {
-    if (osm_id!=0) {
-        if (sqlite3_bind_int64(curs, osm_id, -1*py->Id())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    if (part!=0) {
-        if (sqlite3_bind_int64(curs, part, py->Part())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    if (!call_common(py, tile_qt, curs)) {
-        return false;
-    }
- 
-    if (layer) { 
-        if (sqlite3_bind_int64(curs, layer, py->Layer())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    if (z_order) {
-        if (sqlite3_bind_int64(curs, z_order, py->ZOrder())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    if (way_area) { 
-        if (sqlite3_bind_double(curs, way_area, py->Area())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    return true;
-
-}
-
-
-bool BindElement::call_common(std::shared_ptr<oqt::BaseGeometry> geom, int64_t tile_qt, sqlite3_stmt* curs) {
-                
-    if (tile!=0) {
-        if (sqlite3_bind_int64(curs, tile, tile_qt)!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    if (quadtree!=0) {
-        if (sqlite3_bind_int64(curs, quadtree, geom->Quadtree())!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    //std::vector<oqt::Tag> others;
-    oqt::tagvector others;
-    
-    for (const auto& tg: geom->Tags()) {
-        if (tag_keys.count(tg.key)) {
-            if (sqlite3_bind_text(curs, tag_keys[tg.key], tg.val.data(), tg.val.size(), SQLITE_TRANSIENT)!=SQLITE_OK) {
-                return false;
-            }
-        } else if (tags>0) {
-            others.push_back(tg);
-        }
-    }
-        
-    if (!others.empty()) {
-        auto s = oqt::geometry::pack_hstoretags_binary(others);
-        //std::cout << geom->Id() << " " << others.size() << " [" << s.size() << " bytes: ] " << as_hex(s) << std::endl;
-        if (sqlite3_bind_blob(curs, tags, s.data(), s.size(), SQLITE_TRANSIENT)!=SQLITE_OK) {
-            return false;
-        }
-    }
-    
-    if (minzoom!=0) {
-        if (geom->MinZoom()>=0) {
-            if (sqlite3_bind_int64(curs, minzoom, geom->MinZoom())!=SQLITE_OK) {
-                return false;
-            }
-        }
-    }
-    
-    if (way!=0) {
-        auto wkb = geom->Wkb(true, false);
-        if (sqlite3_bind_blob(curs, way, wkb.data(), wkb.size(), SQLITE_TRANSIENT)!=SQLITE_OK) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool BindElement::call_python(const std::map<std::string,py::object>& props, sqlite3_stmt* curs) {
-
-    oqt::tagvector others;
-    for (const auto& pp: props) {
-        int col=0;
-        if (pp.first=="osm_id") { col=osm_id; }
-        else if (pp.first == "tile") { col=tile; }
-        else if (pp.first == "part") { col=part; }
-        else if (pp.first == "quadtree") { col=quadtree; }
-        else if (pp.first == "minzoom") { col=minzoom; }
-        else if (pp.first == "layer") { col=layer; }
-        else if (pp.first == "length") { col=length; }
-        else if (pp.first == "way_area") {
-            if (way_area == 0) {
-                others.push_back(oqt::Tag("way_area", py::cast<std::string>(py::str(pp.second))));
-            } else {
-                col=way_area;
-            }
-        }
-        else if (pp.first == "z_order") { col=z_order; }
-        else if (pp.first == "way") { col=way; }
-        else if (tag_keys.count(pp.first)) {
-            col=tag_keys.at(pp.first);
-        } else {
-            others.push_back(oqt::Tag(pp.first, py::cast<std::string>(pp.second)));
-        }
-        
-        if (col!=0) {
-            if (bind_obj(curs, pp.second, col)!=SQLITE_OK) {
-                return false;
-            }
-        }
-    }
-    
-    if ((!others.empty()) && (tags!=0)) {
-        auto s = oqt::geometry::pack_hstoretags_binary(others);
-        //std::cout << geom->Id() << " " << others.size() << " [" << s.size() << " bytes: ] " << as_hex(s) << std::endl;
-        if (sqlite3_bind_blob(curs, tags, s.data(), s.size(), SQLITE_TRANSIENT)!=SQLITE_OK) {
-            return false;
-        }
-    }
-    return true;
-}
-*/        
    
 BindElement2::BindElement2(std::vector<std::string> keys, const std::string& _table_name)
         : table_name_(_table_name),
@@ -521,8 +227,8 @@ void call_common(std::shared_ptr<BindElement2> be, sqlite3_stmt* curs, std::shar
     if (geom->Quadtree()>=0) {
         be->bind_quadtree(curs, geom->Quadtree());
     }
-    if (geom->MinZoom()>=0) {
-        be->bind_minzoom(curs, geom->MinZoom());
+    if (geom->MinZoom()) {
+        be->bind_minzoom(curs, *geom->MinZoom());
     }
     
     
@@ -552,8 +258,14 @@ void call_line(std::shared_ptr<BindElement2> be, sqlite3_stmt* curs, std::shared
     
     oqt::tagvector others;
     
-    if (!be->bind_layer(curs, ln->Layer())) { others.push_back(oqt::Tag{"layer",std::to_string(ln->Layer())}); }
-    if (!be->bind_z_order(curs, ln->ZOrder())) { others.push_back(oqt::Tag{"z_order",std::to_string(ln->ZOrder())}); }
+    if (ln->Layer()) {
+        if (!be->bind_layer(curs, *ln->Layer())) { 
+            others.push_back(oqt::Tag{"layer",std::to_string(*ln->Layer())});
+        }
+    }
+    if (ln->ZOrder()) {
+        if (!be->bind_z_order(curs, *ln->ZOrder())) { others.push_back(oqt::Tag{"z_order",std::to_string(*ln->ZOrder())}); }
+    }
     if (!be->bind_way_area(curs, ln->Length())) { others.push_back(oqt::Tag{"length",std::to_string(ln->Length())}); }
     
     
@@ -566,8 +278,12 @@ void call_simplepolygon(std::shared_ptr<BindElement2> be, sqlite3_stmt* curs, st
     
     oqt::tagvector others;
     
-    if (!be->bind_layer(curs, py->Layer())) { others.push_back(oqt::Tag{"layer",std::to_string(py->Layer())}); }
-    if (!be->bind_z_order(curs, py->ZOrder())) { others.push_back(oqt::Tag{"z_order",std::to_string(py->ZOrder())}); }
+    if (py->Layer()) {
+        if (!be->bind_layer(curs, *py->Layer())) { others.push_back(oqt::Tag{"layer",std::to_string(*py->Layer())}); }
+    }
+    if (py->ZOrder()) {
+        if (!be->bind_z_order(curs, *py->ZOrder())) { others.push_back(oqt::Tag{"z_order",std::to_string(*py->ZOrder())}); }
+    }
     if (!be->bind_way_area(curs, py->Area())) { others.push_back(oqt::Tag{"way_area",std::to_string(py->Area())}); }
     call_common(be, curs, py, tile_qt, others);
     
@@ -578,9 +294,12 @@ void call_complicatedpolygon(std::shared_ptr<BindElement2> be, sqlite3_stmt* cur
     //be->bind_part(curs, py->Part());
     
     oqt::tagvector others;
-    
-    if (!be->bind_layer(curs, py->Layer())) { others.push_back(oqt::Tag{"layer",std::to_string(py->Layer())}); }
-    if (!be->bind_z_order(curs, py->ZOrder())) { others.push_back(oqt::Tag{"z_order",std::to_string(py->ZOrder())}); }
+    if (py->Layer()) {
+        if (!be->bind_layer(curs, *py->Layer())) { others.push_back(oqt::Tag{"layer",std::to_string(*py->Layer())}); }
+    }
+    if (py->ZOrder()) {
+        if (!be->bind_z_order(curs, *py->ZOrder())) { others.push_back(oqt::Tag{"z_order",std::to_string(*py->ZOrder())}); }
+    }
     if (!be->bind_way_area(curs, py->Area())) { others.push_back(oqt::Tag{"way_area",std::to_string(py->Area())}); }
     call_common(be, curs, py, tile_qt, others);
     

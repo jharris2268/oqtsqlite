@@ -12,7 +12,7 @@ def call_pkgconfig(args):
         return ans.split()
 
     
-cflags = ['-std=c++14',]
+cflags = ['-std=c++17',]
 #cflags.append('-I/home/james/work/oqtcpp/include')
 cflags.append('-I/usr/local/include')
 cflags.append('-fvisibility=hidden')
@@ -22,7 +22,10 @@ libs =['-L/usr/local/lib', '-loqt', '-lsqlite3']
 libs += [l for l in call_pkgconfig('mapnik-config --libs') if not l in libs]
 cflags += [l for l in call_pkgconfig('mapnik-config --cflags') if not l in cflags]   
 
-
+#mapnik cflags incompatiable with pybind11...
+for x in ('-Wshadow','-std=c++11','-std=c++14'):
+    if x in cflags:
+        cflags.remove(x)
 
 
 srcs = ['src/oqtsqlite.cpp','src/sqlite_funcs.cpp', 'src/result.cpp', 'src/sqlitedb.cpp', 'src/bindelement.cpp', 'src/mvt.cpp']

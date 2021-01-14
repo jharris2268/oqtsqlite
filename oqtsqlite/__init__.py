@@ -58,6 +58,8 @@ def prep_table_line(way_cols=default_node_cols, all_other_tags=True, tabname='pl
     cols += [(n,'text') for n in default_way_cols if (filtercols is None or n in filtercols)]
     if all_other_tags:
         cols += [('tags','blob'),]
+        cols += [('min_admin_level','text'),]
+        cols += [('max_admin_level','text'),]
     
     cols+=[('minzoom','integer')]
     cols += [('layer', 'integer'), ('z_order','integer'),('length','float'),('way','blob')]

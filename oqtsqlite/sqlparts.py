@@ -102,6 +102,21 @@ class IntegerValue(Base):
     def __call__(self, feat, zoom):
         return self.Value
 
+class BoolValue(Base):
+    name = 'IntegerValue'
+    params = ['Value']
+    
+    @property
+    def Key(self):
+        return ''
+    
+    @property
+    def sqlite(self):
+        return 'TRUE' if self.Value else 'FALSE'
+    
+    def __call__(self, feat, zoom):
+        return self.Value
+
 class FloatValue(Base):
     name = 'FloatValue'
     params = ['Value']
@@ -362,6 +377,23 @@ class Concat(Base):
         
         return res
 
+class InValue(Base):
+    name = "InValue"
+    params = ["Column","Values"]
+    
+    @property
+    def sqlite(self):
+        return "%s IN (%s)" % (self.Column.sqlite,", ".join(v.sqlite for v in self.Values))
+    
+    def __call__(self, feat, zoom):
+        col = self.Column(feat, zoom)
+        for vl in self.Values:
+            v = vl(feat,zoom)
+            if col==vl:
+                return True
+        
+        return False
+
 class ColumnOp(Base):
     name = 'ColumnOp'
     params = ['Left','Op','Right']
@@ -508,6 +540,29 @@ class HstoreAccess(Base):
         
         return feat[self.Key]
     
+class AsPoint(Base):
+    name = 'AsPoint'
+    params = ['Column']
+    
+    @property
+    def sqlite(self):
+        return self.Column.sqlite
+        
+    def __call__(self, feat, zoom):
+        return self.Column(feat, zoom)
+        
+class CheckBBox(Base):
+    name = 'CheckBBox'
+    params = []
+    
+    @property
+    def sqlite(self):
+        return 'True'
+        
+    def __call__(self, feat, zoom):
+        return True
+        
+
 
 class AsTable(Base):
     type = 'Table'
@@ -689,6 +744,8 @@ class In(Base):
                 return True
         
         return False
+
+    
 
 class HstoreContains(Base):
     type = 'Where'

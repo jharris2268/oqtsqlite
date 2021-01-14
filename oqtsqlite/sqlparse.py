@@ -48,8 +48,9 @@ def unq_label():    return _(r'[a-z|A-Z][a-z|A-Z|0-9|_]*')
 def qq_label(): return '"',_(r'[a-z|A-Z][a-z|A-Z|0-9|_|:]*'),'"'
 def label():        return Optional([StrMatch("p."),StrMatch("l.")]),[unq_label,qq_label]#,Optional("::",unq_label)
 
+def substring_weird(): return IKwd("substring"),"(",label,IKwd("for"),number,")"
 def function():     return unq_label,"(",Optional(valuelist),")"
-
+def in_value(): return label,IKwd("in"),"(",Optional(valuelist),")"
 
 def calculation():  return [StrMatch(x) for x in ('->>','->','||','*','+','-','/','%',)]
 def operation():    return [StrMatch(x) for x in ('==','<>','<=','>=','<','>','=','!=','~','?','@>',)]
@@ -63,9 +64,11 @@ def case_else():    return IKwd("else"), value
 def case_weird_else():    return IKwd("else"), value
 def case_weird():   return IKwd("case"), label, OneOrMore(case_weird_when), Optional(case_weird_else), IKwd("end")
 
+
+
 def null():         return IKwd("null")
 def literal_value(): return [number,strliteral]
-def value():        return ([literal_value,case_value,case_weird,function,null,label,("(",value,")")],Optional(calculation,value)),Optional([StrMatch("::"),],unq_label)
+def value():        return ([literal_value,case_value,case_weird,substring_weird,function,null,label,("(",value,")")],Optional(calculation,value)),Optional([StrMatch("::"),],unq_label)#,in_value)
 def valuelist():    return value,ZeroOrMore(",",value)
 
 def asfield():      return value, IKwd("as"), [unq_label,qq_label]
@@ -75,7 +78,7 @@ def allfield():     return StrMatch("*")
 def fieldlist():    return (field, ZeroOrMore(",", field))
 
 
-def table():        return [(unq_label,Optional(["p","l"])),("(",bothselect,")", IKwd("as"), label)]#, valuestable],Optional(IKwd("join"), table, IKwd("using"), labellist_brackets)
+def table():        return [(unq_label,Optional(["p","l"])),("(",bothselect,")", Optional([(IKwd("as"), label),'_']))]
 def where():        return IKwd("where"), wherefield
 def labellist_brackets():   return "(", unq_label, ZeroOrMore(",", unq_label), ")"
 def simple_valuelist_brackets():   return "(", [number,strliteral], ZeroOrMore(",",[number,strliteral]),")"
@@ -136,10 +139,12 @@ class Visitor(PTNodeVisitor):
             
             c = [c[0]+c[1]]+c[2:]
         
-        if c[0]=='true':
-            return sq.IntegerValue(1)
-        elif c[0]=='false':
-            return sq.IntegerValue(0)
+        if c[0].lower()=='true':
+            #return sq.IntegerValue(1)
+            return sq.BoolValue(True)
+        elif c[0].lower()=='false':
+            #return sq.IntegerValue(0)
+            return sq.BoolValue(False)
         ll = sq.Label(c[0])
             
         return ll
@@ -205,7 +210,9 @@ class Visitor(PTNodeVisitor):
     def visit_case_weird(self,n,c):
         raise Exception('case_weird')
         
-        
+    def visit_in_value(self, n, c):
+        print("visit_in_value",n,c)
+        return sq.InValue(c[0],c[1])
 
     def visit_function(self,n,c):
         fn = str(c[0]).lower()
@@ -256,8 +263,17 @@ class Visitor(PTNodeVisitor):
         elif fn == 'ascii':
             return sq.IntegerValue(99)
         
-        print('other func', fn)
+        elif fn == 'check_bbox':
+            return sq.CheckBBox()
+            
+        elif fn == 'st_pointonsurface':
+            return sq.AsPoint(c[1][0])
         
+        print('other func', fn)
+    
+    def visit_substring_weird(self,n,c):
+        #print('substring_weird',c)
+        return sq.SubStr(c[0],sq.IntegerValue(0),c[1])
 
 
     def visit_fieldlist(self,n,c):
@@ -274,7 +290,8 @@ class Visitor(PTNodeVisitor):
 
         if len(c)==2:
             if hasattr(c[0],'type') and c[0].type=='Table':
-                
+                if c[1] == '_':
+                    return c[0]
                 return sq.AsTable(c[0],c[1])
             if c[1] in ('p','l'):
                 return sq.PickTable(c[0])
@@ -472,6 +489,8 @@ def clean_query(s):
     s=s.replace("!pixel_height!","pixel_size()")    
     s=s.replace("!scale_denominator!::real","scale_denominator()")
     s=s.replace("!scale_denominator!","scale_denominator()")
+    s=s.replace("way && !bbox!", "check_bbox()==True")
+    
     #s=s.replace("layer~E'^-?\\\\d+$'","layer is not null")
     #s=s.replace("ele ~ \'^-?\\d{1,4}(\\.\\d+)?$\'", "ele is not null")
     #s=s.replace("population ~ '^[0-9]{1,8}$'", "population is not null")
